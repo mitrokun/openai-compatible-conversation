@@ -5,7 +5,7 @@
   "codeowners": ["@michelle-avery"],
   "config_flow": true,
   "dependencies": ["conversation"],
-  "documentation": "https://www.home-assistant.io/integrations/openai_conversation",
+  "documentation": "https://github.com/michelle-avery/openai-compatible-conversation/blob/main/README.md",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": ["openai==1.35.7"],
