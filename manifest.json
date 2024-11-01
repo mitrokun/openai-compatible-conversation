@@ -1,0 +1,13 @@
+{
+  "domain": "openai_compatible_conversation",
+  "name": "OpenAI Compatible Conversation",
+  "after_dependencies": ["assist_pipeline", "intent"],
+  "codeowners": ["@michelle-avery"],
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "documentation": "https://www.home-assistant.io/integrations/openai_conversation",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": ["openai==1.35.7"],
+  "version": "0.0.2"
+}
