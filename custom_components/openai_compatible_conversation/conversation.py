@@ -1,6 +1,7 @@
 """Conversation support for OpenAI Compatible APIs."""
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 import json
 from typing import Any, Literal
 
@@ -72,6 +73,14 @@ def _format_tool(
         tool_spec["description"] = tool.description
     return ChatCompletionToolParam(type="function", function=tool_spec)
 
+@dataclass
+class ChatHistory:
+    """Class holding the chat history."""
+
+    extra_system_prompt: str | None = None
+    messages: list[ChatCompletionMessageParam] = field(default_factory=list)
+
+
 
 class OpenAICompatibleConversationEntity(
     conversation.ConversationEntity, conversation.AbstractConversationAgent
@@ -84,7 +93,7 @@ class OpenAICompatibleConversationEntity(
     def __init__(self, entry: OpenAICompatibleConfigEntry) -> None:
         """Initialize the agent."""
         self.entry = entry
-        self.history: dict[str, list[ChatCompletionMessageParam]] = {}
+        self.history: dict[str, ChatHistory] = {}
         self._attr_unique_id = entry.entry_id
         self._attr_device_info = dr.DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -157,13 +166,14 @@ class OpenAICompatibleConversationEntity(
                 _format_tool(tool, llm_api.custom_serializer) for tool in llm_api.tools
             ]
 
+        history: ChatHistory | None = None
+
         if user_input.conversation_id is None:
             conversation_id = ulid.ulid_now()
-            messages = []
 
         elif user_input.conversation_id in self.history:
             conversation_id = user_input.conversation_id
-            messages = self.history[conversation_id]
+            history = self.history.get(conversation_id)
 
         else:
             # Conversation IDs are ULIDs. We generate a new one if not provided.
@@ -176,7 +186,8 @@ class OpenAICompatibleConversationEntity(
             except ValueError:
                 conversation_id = user_input.conversation_id
 
-            messages = []
+        if history is None:
+            history = ChatHistory(user_input.extra_system_prompt)
 
         if (
             user_input.context
@@ -216,30 +227,42 @@ class OpenAICompatibleConversationEntity(
 
         if llm_api:
             prompt_parts.append(llm_api.api_prompt)
+        
+        extra_system_prompt = (
+            # Take new system prompt if one was given
+            user_input.extra_system_prompt or history.extra_system_prompt
+        )
+
+        if extra_system_prompt:
+            prompt_parts.append(extra_system_prompt)
 
         prompt = "\n".join(prompt_parts)
 
         # Create a copy of the variable because we attach it to the trace
-        messages = [
-            ChatCompletionSystemMessageParam(role="system", content=prompt),
-            *messages[1:],
-            ChatCompletionUserMessageParam(role="user", content=user_input.text),
-        ]
+        history = ChatHistory(
+            extra_system_prompt,
+            [
+                ChatCompletionSystemMessageParam(role="system", content=prompt),
+                *history.messages[1:],
+                ChatCompletionUserMessageParam(role="user", content=user_input.text),
+            ],
+        )
 
-        LOGGER.debug("Prompt: %s", messages)
+        LOGGER.debug("Prompt: %s", history.messages)
         LOGGER.debug("Tools: %s", tools)
         trace.async_conversation_trace_append(
             trace.ConversationTraceEventType.AGENT_DETAIL,
-            {"messages": messages, "tools": llm_api.tools if llm_api else None},
+            {"messages": history.messages, "tools": llm_api.tools if llm_api else None},
         )
 
         client = self.entry.runtime_data
+
         # To prevent infinite loops, we limit the number of iterations
         for _iteration in range(MAX_TOOL_ITERATIONS):
             try:
                 result = await client.chat.completions.create(
                     model=options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
-                    messages=messages,
+                    messages=history.messages,
                     tools=tools or NOT_GIVEN,
                     max_tokens=options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
                     top_p=options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
@@ -285,7 +308,7 @@ class OpenAICompatibleConversationEntity(
                     param["tool_calls"] = tool_calls
                 return param
 
-            messages.append(message_convert(response))
+            history.messages.append(message_convert(response))
             tool_calls = response.tool_calls
 
             if not tool_calls or not llm_api:
@@ -308,7 +331,7 @@ class OpenAICompatibleConversationEntity(
                         tool_response["error_text"] = str(e)
 
                 LOGGER.debug("Tool response: %s", tool_response)
-                messages.append(
+                history.messages.append(
                     ChatCompletionToolMessageParam(
                         role="tool",
                         tool_call_id=tool_call.id,
@@ -316,7 +339,7 @@ class OpenAICompatibleConversationEntity(
                     )
                 )
 
-        self.history[conversation_id] = messages
+        self.history[conversation_id] = history
 
         intent_response = intent.IntentResponse(language=user_input.language)
         intent_response.async_set_speech(response.content or "")
