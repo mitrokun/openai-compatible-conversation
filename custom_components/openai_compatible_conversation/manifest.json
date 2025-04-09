@@ -9,5 +9,5 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": ["openai>=1.60.2"],
-  "version": "0.0.3"
+  "version": "0.0.4"
 }
