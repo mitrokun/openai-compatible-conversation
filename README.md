@@ -4,6 +4,7 @@ This project started off as a copy of Home Assistant's built-in OpenAI Conversat
 As development on Home Assistant's built-in OpenAI Conversation Agent has progressed, more features have been added that are OpenAI specific and less compatible with other providers that offer an OpenAI compatible API. Due to this, this project does have the following limitations:
 
 * OpenAI's reasoning parameters are not supported.
+* Responses are not streamed to the chat log.
 * The project currently continues to use the `max_tokens` parameter as opposed to the newer `max_completion_tokens` parameter for backwards compatibility. 
 
 ## Note about changing the model
