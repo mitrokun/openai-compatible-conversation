@@ -111,7 +111,7 @@ def _convert_content_to_param(
             role = "developer"
         return cast(
             ChatCompletionMessageParam,
-            {"role": content.role, "content": content.content},  # type: ignore[union-attr]
+            {"role": role, "content": content.content},  # type: ignore[union-attr]
         )
 
     # Handle the Assistant content including tool calls.
