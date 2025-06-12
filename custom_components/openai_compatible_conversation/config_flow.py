@@ -41,7 +41,8 @@ from .const import (
     RECOMMENDED_TEMPERATURE,
     RECOMMENDED_TOP_P,
     CONF_BASE_URL,
-    RECOMMENDED_BASE_URL
+    RECOMMENDED_BASE_URL,
+    CONF_NO_THINK
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ RECOMMENDED_OPTIONS = {
     CONF_RECOMMENDED: True,
     CONF_LLM_HASS_API: llm.LLM_API_ASSIST,
     CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,
+    CONF_NO_THINK: False, 
 }
 
 
@@ -185,6 +187,9 @@ def openai_compatible_config_option_schema(
         ): SelectSelector(SelectSelectorConfig(options=hass_apis)),
         vol.Required(
             CONF_RECOMMENDED, default=options.get(CONF_RECOMMENDED, False)
+        ): bool,
+        vol.Required(
+            CONF_NO_THINK, default=options.get(CONF_NO_THINK, False)
         ): bool,
     }
 

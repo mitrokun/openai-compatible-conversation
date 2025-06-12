@@ -24,10 +24,12 @@
           "top_p": "Top P",
           "llm_hass_api": "[%key:common::config_flow::data::llm_hass_api%]",
           "recommended": "Recommended model settings",
-          "base_url": "Base URL of OpenAI compatible API"
+          "base_url": "Base URL of OpenAI compatible API",
+          "no_think": "Qwen no think"
         },
         "data_description": {
-          "prompt": "Instruct how the LLM should respond. This can be a template."
+          "prompt": "Instruct how the LLM should respond. This can be a template.",
+          "no_think": "This option disables thinking for qwen models."
         }
       }
     }
