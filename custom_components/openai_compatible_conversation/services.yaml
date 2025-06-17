@@ -38,3 +38,28 @@ generate_image:
           options:
             - "vivid"
             - "natural"
+
+mistral_vision:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: openai_compatible_conversation
+    prompt:
+      required: true
+      selector:
+        text:
+          multiline: true
+    image_path:
+      required: true
+      selector:
+        text:
+    max_tokens:
+      required: false
+      default: 300
+      selector:
+        number:
+          min: 50
+          max: 1000
+          step: 10
