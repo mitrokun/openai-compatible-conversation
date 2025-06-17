@@ -61,11 +61,48 @@
           "description": "The style of the generated image"
         }
       }
+    },
+    "mistral_vision": {
+      "name": "Mistral Vision",
+      "description": "Generate a textual description of an image using Mistral AI",
+      "fields": {
+        "config_entry": {
+          "name": "Config Entry",
+          "description": "The config entry to use for this action"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "The text prompt to describe the image",
+          "example": "Describe the contents of this image in detail"
+        },
+        "image_path": {
+          "name": "Image Path",
+          "description": "The path to the image file to be described",
+          "example": "/config/www/snapshot.jpg"
+        },
+        "max_tokens": {
+          "name": "Max Tokens",
+          "description": "The maximum number of tokens for the response",
+          "example": 300
+        }
+      }
     }
   },
   "exceptions": {
     "invalid_config_entry": {
       "message": "Invalid config entry provided. Got {config_entry}"
+    },
+    "cannot_read_path": {
+      "message": "Cannot read `{image_path}`, no access to path. `allowlist_external_dirs` may need to be adjusted in `configuration.yaml`"
+    },
+    "file_not_found": {
+      "message": "`{image_path}` does not exist"
+    },
+    "image_encoding_error": {
+      "message": "Error encoding image: {error}"
+    },
+    "image_processing_error": {
+      "message": "Error processing image: {error}"
     }
   }
 }
