@@ -18,11 +18,11 @@
       "init": {
         "data": {
           "prompt": "Instructions",
-          "chat_model": "[%key:common::generic::model%]",
+          "chat_model": "Model",
           "max_tokens": "Maximum tokens to return in response",
           "temperature": "Temperature",
           "top_p": "Top P",
-          "llm_hass_api": "[%key:common::config_flow::data::llm_hass_api%]",
+          "llm_hass_api": "Expose Home Assistant APIs to the LLM",
           "recommended": "Recommended model settings",
           "base_url": "Base URL of OpenAI compatible API",
           "no_think": "Qwen no think"
@@ -83,7 +83,22 @@
         "max_tokens": {
           "name": "Max Tokens",
           "description": "The maximum number of tokens for the response",
-          "example": 300
+          "example": "300"
+        }
+      }
+    },
+    "web_search": {
+      "name": "Web Search",
+      "description": "Asks a question to a Mistral agent with web search capabilities. Returns a text response.",
+      "fields": {
+        "config_entry": {
+          "name": "Voice Assistant",
+          "description": "Select Mistral pipeline"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "The question you want to ask the agent.",
+          "example": "What is the current weather in Paris?"
         }
       }
     }

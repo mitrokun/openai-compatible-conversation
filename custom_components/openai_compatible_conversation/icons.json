@@ -2,6 +2,9 @@
   "services": {
     "mistral_vision": {
       "service": "mdi:message-image"
+    },
+    "web_search": {
+      "service": "mdi:search-web"
     }
   }
 }
