@@ -2,6 +2,7 @@
 * Streaming support for LLM
 * Fix for Mistral AI
 * Mistral Vision action
+* Web serch agent
 
 # OpenAI Compatible Conversation
 This project started off as a copy of Home Assistant's built-in OpenAI Conversation Agent, with support for changing the base URL. Only the minimal changes to make this a standalone custom component capable of supporting a different base URL to make it compatible with other services offering an OpenAI-compatible API were  made.
