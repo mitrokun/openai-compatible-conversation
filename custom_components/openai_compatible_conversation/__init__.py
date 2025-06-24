@@ -193,6 +193,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         return response.data[0].model_dump(exclude={"b64_json"})
 
+
     async def mistral_vision(call: ServiceCall) -> ServiceResponse:
         """Describe an image using Mistral AI."""
         entry_id = call.data["config_entry"]
@@ -214,7 +215,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_key="cannot_read_path",
                 translation_placeholders={"image_path": image_path}
             )
-        if not os.path.exists(image_path):
+        
+        if not await hass.async_add_executor_job(os.path.exists, image_path):
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="file_not_found",
@@ -222,8 +224,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
 
         try:
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            image_bytes = await hass.async_add_executor_job(
+                lambda: open(image_path, "rb").read()
+            )
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
         except Exception as e:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -246,11 +250,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         try:
             response = await client.chat.completions.create(
-                model=entry.options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
+                model=entry.options.get(CONF_CHAT_MODEL, "mistral-medium-latest"),
                 messages=messages,
                 max_tokens=call.data.get("max_tokens", entry.options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS)),
             )
-            return {"text": response.choices[0].message.content}
+            content = response.choices[0].message.content
+            return {"text": content if content else ""}
         except openai.OpenAIError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
