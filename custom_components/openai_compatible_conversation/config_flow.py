@@ -29,21 +29,21 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.typing import VolDictType
 
 from .const import (
+    CONF_BASE_URL,
     CONF_CHAT_MODEL,
     CONF_MAX_TOKENS,
+    CONF_NO_THINK,
     CONF_PROMPT,
     CONF_RECOMMENDED,
+    CONF_STRIP_THINK_TAGS,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     DOMAIN,
+    RECOMMENDED_BASE_URL,
     RECOMMENDED_CHAT_MODEL,
     RECOMMENDED_MAX_TOKENS,
     RECOMMENDED_TEMPERATURE,
-    RECOMMENDED_TOP_P,
-    CONF_BASE_URL,
-    RECOMMENDED_BASE_URL,
-    CONF_NO_THINK
-)
+    RECOMMENDED_TOP_P,)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +58,8 @@ RECOMMENDED_OPTIONS = {
     CONF_RECOMMENDED: True,
     CONF_LLM_HASS_API: llm.LLM_API_ASSIST,
     CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,
-    CONF_NO_THINK: False, 
+    CONF_NO_THINK: False,
+    CONF_STRIP_THINK_TAGS: False,
 }
 
 
@@ -191,8 +192,10 @@ def openai_compatible_config_option_schema(
         vol.Required(
             CONF_NO_THINK, default=options.get(CONF_NO_THINK, False)
         ): bool,
+        vol.Required(  # <-- НОВЫЙ ПЕРЕКЛЮЧАТЕЛЬ
+            CONF_STRIP_THINK_TAGS, default=options.get(CONF_STRIP_THINK_TAGS, False)
+        ): bool,
     }
-
     if options.get(CONF_RECOMMENDED):
         return schema
 

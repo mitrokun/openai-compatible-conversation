@@ -25,11 +25,13 @@
           "llm_hass_api": "Expose Home Assistant APIs to the LLM",
           "recommended": "Recommended model settings",
           "base_url": "Base URL of OpenAI compatible API",
-          "no_think": "Qwen no think"
+          "no_think": "Qwen no think",
+          "strip_think_tags": "Hide thinking process"
         },
         "data_description": {
           "prompt": "Instruct how the LLM should respond. This can be a template.",
-          "no_think": "This option disables thinking for qwen models."
+          "no_think": "This option disables thinking for qwen models.",
+          "strip_think_tags": "Text within think tags is excluded from the output and history."
         }
       }
     }

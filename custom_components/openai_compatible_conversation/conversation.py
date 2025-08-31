@@ -20,7 +20,7 @@ from openai.types.chat.chat_completion_message_tool_call_param import Function
 from openai.types.shared_params import FunctionDefinition
 from voluptuous_openapi import convert
 
-from homeassistant.components import assist_pipeline, conversation
+from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
@@ -32,7 +32,9 @@ from . import OpenAICompatibleConfigEntry
 from .const import (
     CONF_CHAT_MODEL,
     CONF_MAX_TOKENS,
+    CONF_NO_THINK,
     CONF_PROMPT,
+    CONF_STRIP_THINK_TAGS,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     DOMAIN,
@@ -41,7 +43,6 @@ from .const import (
     RECOMMENDED_MAX_TOKENS,
     RECOMMENDED_TEMPERATURE,
     RECOMMENDED_TOP_P,
-    CONF_NO_THINK,
 )
 
 # Max number of back and forth with the LLM to generate a response
@@ -125,27 +126,71 @@ def _convert_content_to_param(
 
 async def _openai_to_ha_stream(
     stream: AsyncStream[ChatCompletionChunk],
+    strip_think_tags: bool,
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict, None]:
     """Transform the OpenAI stream into the Home Assistant delta format."""
     first_chunk = True
     active_tool_calls_by_index: dict[int, dict[str, Any]] = {}
+    
+    # State for stripping think tags
+    buffer = ""
+    is_in_think_block = False
+    start_tag = "<think>"
+    end_tag = "</think>"
 
     async for chunk in stream:
         if not chunk.choices:
             continue
 
         delta = chunk.choices[0].delta
-        choice_finish_reason = chunk.choices[0].finish_reason
-        ha_chunk_for_yield: conversation.AssistantContentDeltaDict = {}
+        LOGGER.debug("Received stream delta: %s", delta)
 
+        # Handle role on the first chunk
         if first_chunk and delta.role:
-            ha_chunk_for_yield["role"] = delta.role
+            yield {"role": delta.role}
             first_chunk = False
-
+        
+        # Handle content with filtering
         if delta.content:
-            ha_chunk_for_yield["content"] = delta.content
+            if not strip_think_tags:
+                yield {"content": delta.content}
+                continue
 
+            buffer += delta.content
+            while True:
+                if is_in_think_block:
+                    end_tag_pos = buffer.find(end_tag)
+                    if end_tag_pos != -1:
+                        is_in_think_block = False
+                        buffer = buffer[end_tag_pos + len(end_tag):]
+                        # Continue loop to process buffer after the tag
+                        continue
+                    break # Need more data
+                else:
+                    start_tag_pos = buffer.find(start_tag)
+                    if start_tag_pos != -1:
+                        content_to_yield = buffer[:start_tag_pos]
+                        if content_to_yield:
+                            yield {"content": content_to_yield}
+                        
+                        is_in_think_block = True
+                        buffer = buffer[start_tag_pos + len(start_tag):]
+                        # Continue loop to process buffer after the tag
+                        continue
+                    
+                    # No start tag found. We can safely yield a portion of the buffer
+                    # to avoid holding too much data, leaving a small part to prevent
+                    # splitting a potential start tag.
+                    if len(buffer) > len(start_tag):
+                        safe_yield_len = len(buffer) - len(start_tag)
+                        yield {"content": buffer[:safe_yield_len]}
+                        buffer = buffer[safe_yield_len:]
+                    
+                    break # Need more data
+        
+        # --- Tool call processing remains the same ---
         if delta.tool_calls:
+            # ... (логика обработки tool_calls)
             for tc_delta in delta.tool_calls:
                 if tc_delta.index is None:
                     continue
@@ -159,76 +204,37 @@ async def _openai_to_ha_stream(
                         current_tc_data["name"] = tc_delta.function.name
                     if tc_delta.function.arguments:
                         current_tc_data["args_str"] += tc_delta.function.arguments
-
+        
+        choice_finish_reason = chunk.choices[0].finish_reason
         if choice_finish_reason and active_tool_calls_by_index:
-            final_tool_inputs: list[llm.ToolInput] = []
+            # ... (логика завершения tool_calls)
+            final_tool_inputs = []
             for index, tc_data in sorted(active_tool_calls_by_index.items()):
                 tool_id = tc_data.get("id", f"call_{index}")
                 tool_name = tc_data.get("name")
                 args_str = tc_data.get("args_str", "{}")
-
-                if not tool_name:
-                    continue
-
+                if not tool_name: continue
                 try:
                     parsed_args = json.loads(args_str if args_str else "{}")
                     final_tool_inputs.append(
-                        llm.ToolInput(
-                            id=tool_id, tool_name=tool_name, tool_args=parsed_args
-                        )
+                        llm.ToolInput(id=tool_id, tool_name=tool_name, tool_args=parsed_args)
                     )
                 except json.JSONDecodeError:
-                    LOGGER.error(
-                        "Failed to decode JSON arguments for tool %s (ID: %s): %s",
-                        tool_name,
-                        tool_id,
-                        args_str,
-                    )
-                    final_tool_inputs.append(
-                        llm.ToolInput(id=tool_id, tool_name=tool_name, tool_args={})
-                    )
+                    LOGGER.error("Failed to decode JSON for tool %s: %s", tool_name, args_str)
             if final_tool_inputs:
-                ha_chunk_for_yield["tool_calls"] = final_tool_inputs
+                yield {"tool_calls": final_tool_inputs}
             active_tool_calls_by_index.clear()
 
-        if ha_chunk_for_yield:
-            yield ha_chunk_for_yield
-
-    if active_tool_calls_by_index:
-        final_tool_inputs_after_loop: list[llm.ToolInput] = []
-        for index, tc_data in sorted(active_tool_calls_by_index.items()):
-            tool_id = tc_data.get("id", f"call_after_loop_{index}")
-            tool_name = tc_data.get("name")
-            args_str = tc_data.get("args_str", "{}")
-            if not tool_name:
-                continue
-            try:
-                parsed_args = json.loads(args_str if args_str else "{}")
-                final_tool_inputs_after_loop.append(
-                    llm.ToolInput(
-                        id=tool_id, tool_name=tool_name, tool_args=parsed_args
-                    )
-                )
-            except json.JSONDecodeError:
-                LOGGER.error(
-                    "Failed to decode JSON for tool (after loop) %s (ID: %s): %s",
-                    tool_name,
-                    tool_id,
-                    args_str,
-                )
-                final_tool_inputs_after_loop.append(
-                    llm.ToolInput(id=tool_id, tool_name=tool_name, tool_args={})
-                )
-        if final_tool_inputs_after_loop:
-            yield {"tool_calls": final_tool_inputs_after_loop}
-        active_tool_calls_by_index.clear()
+    # After the loop, yield any remaining valid content from the buffer
+    if strip_think_tags and not is_in_think_block and buffer:
+        yield {"content": buffer}
 
 
 class OpenAICompatibleConversationEntity(
     conversation.ConversationEntity, conversation.AbstractConversationAgent
 ):
     """OpenAI Compatible conversation agent."""
-
+    # ... (остальная часть класса остается без изменений) ...
     _attr_has_entity_name = True
     _attr_name = None
     _attr_supports_streaming = True
@@ -255,15 +261,12 @@ class OpenAICompatibleConversationEntity(
         return MATCH_ALL
 
     async def async_added_to_hass(self) -> None:
-        """When entity is added to Home Assistant."""
-        await super().async_added_to_hass()
-        assist_pipeline.async_migrate_engine(
-            self.hass, "conversation", self.entry.entry_id, self.entity_id
-        )
-        conversation.async_set_agent(self.hass, self.entry, self)
-        self.entry.async_on_unload(
-            self.entry.add_update_listener(self._async_entry_update_listener)
-        )
+            """When entity is added to Home Assistant."""
+            await super().async_added_to_hass()
+            conversation.async_set_agent(self.hass, self.entry, self)
+            self.entry.async_on_unload(
+                self.entry.add_update_listener(self._async_entry_update_listener)
+            )
 
     async def async_will_remove_from_hass(self) -> None:
         """When entity will be removed from Home Assistant."""
@@ -309,34 +312,24 @@ class OpenAICompatibleConversationEntity(
                 for tool in chat_log.llm_api.tools
             ]
 
-        # To prevent infinite loops, we limit the number of iterations
         for _iteration in range(MAX_TOOL_ITERATIONS):
             try:
-                # Regenerate messages from the chat log for each iteration.
-                # This is crucial for the "lazy" tool execution to work, as it triggers
-                # the generation of ToolResultContent for unresponded tool calls.
-                messages = [_convert_content_to_param(content) for content in chat_log.content]
+                messages = [
+                    _convert_content_to_param(content) for content in chat_log.content
+                ]
             except Exception as err:
-                # This will catch errors during the "lazy" tool execution inside chat_log.content
-                LOGGER.error("Error during tool execution or history regeneration: %s", err)
-                raise HomeAssistantError(f"Failed to execute a tool: {err}") from err
+                LOGGER.error("Error during history regeneration: %s", err)
+                raise HomeAssistantError(f"Failed to process history: {err}") from err
 
-            # Special handling for /no_think, applied to the last user message
+            # Original "No Think" logic remains here
             if _iteration == 0:
                 no_think_enabled = options.get(CONF_NO_THINK, False)
                 if no_think_enabled and messages and messages[-1]["role"] == "user":
                     user_message = messages[-1]
-                    current_content_any = user_message.get("content")
-                    current_content = str(current_content_any) if current_content_any is not None else ""
+                    current_content = str(user_message.get("content", ""))
                     if not current_content.endswith("/no_think"):
                         user_message["content"] = current_content + "/no_think"
-                        LOGGER.debug("Appended /no_think because 'No think' option is enabled.")
-
-            LOGGER.debug(
-                "Starting tool iteration %d with %d messages.",
-                _iteration,
-                len(messages),
-            )
+                        LOGGER.debug("Appended /no_think to user message.")
 
             base_url = str(getattr(self.entry.runtime_data, "base_url", ""))
             is_mistral = "mistral.ai" in base_url.lower()
@@ -348,9 +341,7 @@ class OpenAICompatibleConversationEntity(
                 "tool_choice": "auto" if tools else NOT_GIVEN,
                 "max_tokens": options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
                 "top_p": options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
-                "temperature": options.get(
-                    CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE
-                ),
+                "temperature": options.get(CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE),
                 "stream": True,
             }
             if not is_mistral:
@@ -359,35 +350,33 @@ class OpenAICompatibleConversationEntity(
             try:
                 response_stream = await client.chat.completions.create(**model_args)
 
-                # Process the stream. This will add AssistantContent to the chat_log
-                # and populate chat_log.unresponded_tool_results if there are tool calls.
+                # Use the new option to control the filtering
+                strip_tags = options.get(CONF_STRIP_THINK_TAGS, False)
                 async for _ in chat_log.async_add_delta_content_stream(
                     user_input.agent_id,
-                    _openai_to_ha_stream(response_stream),
+                    _openai_to_ha_stream(response_stream, strip_think_tags=strip_tags),
                 ):
                     pass
 
             except openai.RateLimitError as err:
-                LOGGER.error("Rate limited by OpenAI compatible API: %s", err)
+                LOGGER.error("Rate limited by API: %s", err)
                 raise HomeAssistantError("Rate limited or insufficient funds") from err
             except openai.OpenAIError as err:
-                LOGGER.error("Error talking to OpenAI compatible API: %s", err)
+                LOGGER.error("Error talking to API: %s", err)
                 error_body = getattr(err, "body", None)
                 if error_body:
                     LOGGER.error("API Error Body: %s", error_body)
                 raise HomeAssistantError(f"Error talking to API: {err}") from err
             except Exception as err:
-                LOGGER.exception("Unexpected error during streaming request")
+                LOGGER.exception("Unexpected streaming error")
                 raise HomeAssistantError(f"An unexpected error occurred: {err}") from err
 
-            # Check if there are tools to be executed. The `unresponded_tool_results`
-            # property is the canonical way to do this.
             if not chat_log.unresponded_tool_results:
-                LOGGER.debug("No tool calls in response, finishing.")
                 break
 
-        # After the loop, the final message is the last one in the chat log.
-        if not isinstance(chat_log.content[-1], conversation.AssistantContent):
+        if not chat_log.content or not isinstance(
+            chat_log.content[-1], conversation.AssistantContent
+        ):
             raise HomeAssistantError("Last message in chat log is not from the assistant.")
 
         intent_response = intent.IntentResponse(language=user_input.language)

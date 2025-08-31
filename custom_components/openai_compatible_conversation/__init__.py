@@ -71,6 +71,11 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
         agent_payload = {
             "model": "mistral-medium-latest",
             "name": f"Home Assistant Agent ({entry.title})",
+            "instructions": (
+                "Следуй этим инструкциям:\n"
+                "- Для поиска актуальной информации в интернете используй инструмент `web_search`.\n"
+                "- В своем итоговом ответе всегда записывай числовые значения словами, а не цифрами. "
+            ),
             "tools": [{"type": "web_search"}]
         }
         try:
