@@ -1,0 +1,125 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "api_key": "[%key:common::config_flow::data::api_key%]"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "prompt": "Instruktioner",
+          "chat_model": "Modell",
+          "max_tokens": "Maximalt antal tokens att returnera i svaret",
+          "temperature": "Temperatur",
+          "top_p": "Top P",
+          "llm_hass_api": "Exponera Home Assistant APIs till LLM",
+          "recommended": "Rekommenderade modellinställningar",
+          "base_url": "Bas-URL för OpenAI-kompatibelt API",
+          "no_think": "Qwen har inget tänkt steg",
+          "strip_think_tags": "Dölj tänkeprocess"
+        },
+        "data_description": {
+          "prompt": "Instruera hur LLM ska svara. Detta kan vara en mall.",
+          "no_think": "Detta alternativ inaktiverar tänkande för Qwen-modeller.",
+          "strip_think_tags": "Text inom think-taggar utesluts från utdata och historik."
+        }
+      }
+    }
+  },
+  "services": {
+    "generate_image": {
+      "name": "Generera bild",
+      "description": "Omvandla en prompt till en bild",
+      "fields": {
+        "config_entry": {
+          "name": "Konfigurationspost",
+          "description": "Konfigurationsposten som ska användas för denna åtgärd"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "Texten som ska omvandlas till en bild",
+          "example": "En bild på en hund"
+        },
+        "size": {
+          "name": "Storlek",
+          "description": "Storleken på den bild som ska genereras"
+        },
+        "quality": {
+          "name": "Kvalitet",
+          "description": "Kvaliteten på den genererade bilden"
+        },
+        "style": {
+          "name": "Stil",
+          "description": "Stilen på den genererade bilden"
+        }
+      }
+    },
+    "mistral_vision": {
+      "name": "Mistral Vision",
+      "description": "Generera en textbeskrivning av en bild med hjälp av Mistral AI",
+      "fields": {
+        "config_entry": {
+          "name": "Konfigurationspost",
+          "description": "Konfigurationsposten som ska användas för denna åtgärd"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "Textinstruktionen för att beskriva bilden",
+          "example": "Beskriv innehållet i denna bild i detalj"
+        },
+        "image_path": {
+          "name": "Bildsökväg",
+          "description": "Sökvägen till bildfilen som ska beskrivas",
+          "example": "/config/www/snapshot.jpg"
+        },
+        "max_tokens": {
+          "name": "Max tokens",
+          "description": "Maximalt antal tokens för svaret",
+          "example": "300"
+        }
+      }
+    },
+    "web_search": {
+      "name": "Webbsökning",
+      "description": "Ställ en fråga till en Mistral-agent med webbsökningsfunktioner. Returnerar ett textbaserat svar.",
+      "fields": {
+        "config_entry": {
+          "name": "Röstassistent",
+          "description": "Välj Mistral-pipeline"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "Frågan du vill ställa till agenten.",
+          "example": "Vad är det aktuella vädret i Paris?"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_config_entry": {
+      "message": "Ogiltig konfigurationspost angiven. Fick {config_entry}"
+    },
+    "cannot_read_path": {
+      "message": "Kan inte läsa `{image_path}`, ingen åtkomst till sökvägen. `allowlist_external_dirs` kan behöva justeras i `configuration.yaml`"
+    },
+    "file_not_found": {
+      "message": "Filen `{image_path}` finns inte"
+    },
+    "image_encoding_error": {
+      "message": "Fel vid kodning av bild: {error}"
+    },
+    "image_processing_error": {
+      "message": "Fel vid bearbetning av bild: {error}"
+    }
+  }
+}
