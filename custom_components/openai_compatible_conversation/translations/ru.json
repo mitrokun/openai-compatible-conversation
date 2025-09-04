@@ -3,7 +3,12 @@
     "step": {
       "user": {
         "data": {
-          "api_key": "[%key:common::config_flow::data::api_key%]"
+          "api_key": "API Key",
+          "base_url": "Endpoint"
+        },
+        "data_description": {
+          "api_key": "Укажите ключ",
+          "base_url": "Укажите эндпоинт. Например: https://openrouter.ai/api/v1/"
         }
       }
     },
@@ -13,6 +18,7 @@
       "unknown": "[%key:common::config_flow::error::unknown%]"
     }
   },
+
   "options": {
     "step": {
       "init": {
