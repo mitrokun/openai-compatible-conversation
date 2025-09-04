@@ -2,11 +2,13 @@
 
 from collections.abc import AsyncGenerator, Callable
 import json
+import traceback
 from typing import Any, Literal, cast
 
 import openai
 from openai import AsyncStream
 from openai._types import NOT_GIVEN
+
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionChunk,
@@ -16,7 +18,11 @@ from openai.types.chat import (
     ChatCompletionToolMessageParam,
     ChatCompletionToolParam,
 )
-from openai.types.chat.chat_completion_message_tool_call_param import Function
+from openai.types.chat.chat_completion_message_function_tool_call_param import (
+    ChatCompletionMessageFunctionToolCallParam,
+    Function,
+)
+
 from openai.types.shared_params import FunctionDefinition
 from voluptuous_openapi import convert
 
@@ -97,7 +103,7 @@ def _convert_content_to_param(
                 role="assistant",
                 content=content.content or "",
                 tool_calls=[
-                    ChatCompletionMessageToolCallParam(
+                    ChatCompletionMessageFunctionToolCallParam(
                         id=tool_call.id,
                         function=Function(
                             arguments=json.dumps(tool_call.tool_args),
@@ -296,11 +302,11 @@ class OpenAICompatibleConversationEntity(
         client = self.entry.runtime_data
 
         try:
-            await chat_log.async_update_llm_data(
-                DOMAIN,
-                user_input,
+            await chat_log.async_provide_llm_data(
+                user_input.as_llm_context(DOMAIN),  # 1. Передаем контекст
                 options.get(CONF_LLM_HASS_API),
                 options.get(CONF_PROMPT),
+                user_input.extra_system_prompt,    # 2. Добавляем системные промпты из UI
             )
         except conversation.ConverseError as err:
             return err.as_conversation_result()
@@ -317,8 +323,8 @@ class OpenAICompatibleConversationEntity(
                 messages = [
                     _convert_content_to_param(content) for content in chat_log.content
                 ]
-            except Exception as err:
-                LOGGER.error("Error during history regeneration: %s", err)
+            except Exception:
+                LOGGER.error("Full traceback of history regeneration error:\n%s", traceback.format_exc())
                 raise HomeAssistantError(f"Failed to process history: {err}") from err
 
             # Original "No Think" logic remains here
