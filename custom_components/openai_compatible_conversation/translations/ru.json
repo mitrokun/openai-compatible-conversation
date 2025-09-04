@@ -13,9 +13,9 @@
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "cannot_connect": "Не удалось подключиться. Проверьте соединение, доступность ресурса и endpoint.",
+      "invalid_auth": "Неверный API-ключ.",
+      "unknown": "Произошла неизвестная ошибка."
     }
   },
 
