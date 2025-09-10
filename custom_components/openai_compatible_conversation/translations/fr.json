@@ -1,0 +1,130 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "api_key": "Clé API",
+          "base_url": "Endpoint"
+        },
+        "data_description": {
+          "api_key": "Indiquez la clé",
+          "base_url": "Indiquez l'endpoint. Exemple : https://openrouter.ai/api/v1/"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter. Vérifiez la connexion, la disponibilité de la ressource et l'endpoint.",
+      "invalid_auth": "Clé API invalide.",
+      "unknown": "Une erreur inconnue est survenue."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "prompt": "Instructions",
+          "chat_model": "Modèle",
+          "max_tokens": "Limite de tokens dans la réponse",
+          "temperature": "Température",
+          "top_p": "Top P",
+          "llm_hass_api": "Accès LLM à l'API",
+          "recommended": "Paramètres de modèle recommandés",
+          "base_url": "URL de base pour l'API compatible OpenAI",
+          "no_think": "Désactiver les 'réflexions' de Qwen",
+          "strip_think_tags": "Masquer le processus de réflexion"
+        },
+        "data_description": {
+          "prompt": "Spécifiez le prompt système. Vous pouvez utiliser des expressions de modèle",
+          "no_think": "Cette option désactive l'étape de 'réflexion' pour les modèles Qwen",
+          "strip_think_tags": "Le texte à l'intérieur des balises de réflexion est exclu de la sortie et de l'historique"
+        }
+      }
+    }
+  },
+  "services": {
+    "generate_image": {
+      "name": "Générer une image",
+      "description": "Transformer une instruction textuelle en image",
+      "fields": {
+        "config_entry": {
+          "name": "Entrée de configuration",
+          "description": "L'entrée de configuration à utiliser pour cette action"
+        },
+        "prompt": {
+          "name": "Instruction",
+          "description": "Le texte à transformer en image",
+          "example": "Une photo d'un chien"
+        },
+        "size": {
+          "name": "Taille",
+          "description": "La taille de l'image à générer"
+        },
+        "quality": {
+          "name": "Qualité",
+          "description": "La qualité de l'image générée"
+        },
+        "style": {
+          "name": "Style",
+          "description": "Le style de l'image générée"
+        }
+      }
+    },
+    "mistral_vision": {
+      "name": "Vision Mistral",
+      "description": "Générer une description textuelle d'une image en utilisant Mistral AI",
+      "fields": {
+        "config_entry": {
+          "name": "Entrée de configuration",
+          "description": "L'entrée de configuration à utiliser pour cette action"
+        },
+        "prompt": {
+          "name": "Instruction",
+          "description": "L'instruction textuelle pour décrire l'image",
+          "example": "Décrivez le contenu de cette image en détail"
+        },
+        "image_path": {
+          "name": "Chemin de l'image",
+          "description": "Le chemin vers le fichier image à décrire",
+          "example": "/config/www/snapshot.jpg"
+        },
+        "max_tokens": {
+          "name": "Nombre max de tokens",
+          "description": "Le nombre maximum de tokens pour la réponse",
+          "example": "300"
+        }
+      }
+    },
+    "web_search": {
+      "name": "Recherche Web",
+      "description": "Pose une question à un agent Mistral avec des capacités de recherche Web. Retourne une réponse textuelle.",
+      "fields": {
+        "config_entry": {
+          "name": "Assistant Vocal",
+          "description": "Sélectionnez le pipeline Mistral"
+        },
+        "prompt": {
+          "name": "Instruction",
+          "description": "La question que vous souhaitez poser à l'agent.",
+          "example": "Quel est le temps actuel à Paris?"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_config_entry": {
+      "message": "Entrée de configuration invalide fournie. Reçu : {config_entry}"
+    },
+    "cannot_read_path": {
+      "message": "Impossible de lire `{image_path}`, aucun accès au chemin. `allowlist_external_dirs` peut nécessiter d'être ajusté dans `configuration.yaml`"
+    },
+    "file_not_found": {
+      "message": "Le fichier `{image_path}` n'existe pas"
+    },
+    "image_encoding_error": {
+      "message": "Erreur lors de l'encodage de l'image : {error}"
+    },
+    "image_processing_error": {
+      "message": "Erreur lors du traitement de l'image : {error}"
+    }
+  }
+}
