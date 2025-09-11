@@ -1,8 +1,7 @@
 """Conversation support for OpenAI Compatible APIs."""
 
-from collections.abc import AsyncGenerator, Callable
 import json
-import traceback
+from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal, cast
 
 import openai
@@ -196,7 +195,6 @@ async def _openai_to_ha_stream(
         
         # --- Tool call processing remains the same ---
         if delta.tool_calls:
-            # ... (логика обработки tool_calls)
             for tc_delta in delta.tool_calls:
                 if tc_delta.index is None:
                     continue
@@ -213,7 +211,6 @@ async def _openai_to_ha_stream(
         
         choice_finish_reason = chunk.choices[0].finish_reason
         if choice_finish_reason and active_tool_calls_by_index:
-            # ... (логика завершения tool_calls)
             final_tool_inputs = []
             for index, tc_data in sorted(active_tool_calls_by_index.items()):
                 tool_id = tc_data.get("id", f"call_{index}")
@@ -240,7 +237,6 @@ class OpenAICompatibleConversationEntity(
     conversation.ConversationEntity, conversation.AbstractConversationAgent
 ):
     """OpenAI Compatible conversation agent."""
-    # ... (остальная часть класса остается без изменений) ...
     _attr_has_entity_name = True
     _attr_name = None
     _attr_supports_streaming = True
@@ -303,10 +299,10 @@ class OpenAICompatibleConversationEntity(
 
         try:
             await chat_log.async_provide_llm_data(
-                user_input.as_llm_context(DOMAIN),  # 1. Передаем контекст
+                user_input.as_llm_context(DOMAIN),
                 options.get(CONF_LLM_HASS_API),
                 options.get(CONF_PROMPT),
-                user_input.extra_system_prompt,    # 2. Добавляем системные промпты из UI
+                user_input.extra_system_prompt,
             )
         except conversation.ConverseError as err:
             return err.as_conversation_result()
@@ -323,8 +319,8 @@ class OpenAICompatibleConversationEntity(
                 messages = [
                     _convert_content_to_param(content) for content in chat_log.content
                 ]
-            except Exception:
-                LOGGER.error("Full traceback of history regeneration error:\n%s", traceback.format_exc())
+            except Exception as err:
+                LOGGER.error("Error during history regeneration: %s", err)
                 raise HomeAssistantError(f"Failed to process history: {err}") from err
 
             # Original "No Think" logic remains here
@@ -374,7 +370,7 @@ class OpenAICompatibleConversationEntity(
                     LOGGER.error("API Error Body: %s", error_body)
                 raise HomeAssistantError(f"Error talking to API: {err}") from err
             except Exception as err:
-                LOGGER.exception("Unexpected streaming error")
+                LOGGER.error("Unexpected streaming error: %s", err)
                 raise HomeAssistantError(f"An unexpected error occurred: {err}") from err
 
             if not chat_log.unresponded_tool_results:
