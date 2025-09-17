@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "data": {
+          "name": "Nom",
           "api_key": "Clé API",
           "base_url": "Endpoint"
         },
@@ -18,25 +19,30 @@
       "unknown": "Une erreur inconnue est survenue."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "data": {
-          "prompt": "Instructions",
-          "chat_model": "Modèle",
-          "max_tokens": "Limite de tokens dans la réponse",
-          "temperature": "Température",
-          "top_p": "Top P",
-          "llm_hass_api": "Accès LLM à l'API",
-          "recommended": "Paramètres de modèle recommandés",
-          "base_url": "URL de base pour l'API compatible OpenAI",
-          "no_think": "Désactiver les 'réflexions' de Qwen",
-          "strip_think_tags": "Masquer le processus de réflexion"
-        },
-        "data_description": {
-          "prompt": "Spécifiez le prompt système. Vous pouvez utiliser des expressions de modèle",
-          "no_think": "Cette option désactive l'étape de 'réflexion' pour les modèles Qwen",
-          "strip_think_tags": "Le texte à l'intérieur des balises de réflexion est exclu de la sortie et de l'historique"
+  "config_subentries": {
+    "conversation": {
+      "initiate_flow": {
+        "user": "Ajouter un agent de conversation"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "name": "Nom de l'agent",
+            "prompt": "Instructions",
+            "chat_model": "Modèle",
+            "max_tokens": "Limite de tokens dans la réponse",
+            "temperature": "Température",
+            "top_p": "Top P",
+            "llm_hass_api": "Accès LLM à l'API",
+            "no_think": "Désactiver les 'réflexions' de Qwen",
+            "strip_think_tags": "Masquer le processus de réflexion"
+          },
+          "data_description": {
+            "name": "Donnez un nom unique et descriptif à cet agent.",
+            "prompt": "Spécifiez le prompt système. Vous pouvez utiliser des expressions de modèle.",
+            "no_think": "Cette option désactive l'étape de 'réflexion' pour les modèles Qwen.",
+            "strip_think_tags": "Le texte à l'intérieur des balises <think> est exclu de la sortie et de l'historique."
+          }
         }
       }
     }
@@ -56,16 +62,13 @@
           "example": "Une photo d'un chien"
         },
         "size": {
-          "name": "Taille",
-          "description": "La taille de l'image à générer"
+          "name": "Taille"
         },
         "quality": {
-          "name": "Qualité",
-          "description": "La qualité de l'image générée"
+          "name": "Qualité"
         },
         "style": {
-          "name": "Style",
-          "description": "Le style de l'image générée"
+          "name": "Style"
         }
       }
     },
@@ -74,8 +77,7 @@
       "description": "Générer une description textuelle d'une image en utilisant Mistral AI",
       "fields": {
         "config_entry": {
-          "name": "Entrée de configuration",
-          "description": "L'entrée de configuration à utiliser pour cette action"
+          "name": "Entrée de configuration"
         },
         "prompt": {
           "name": "Instruction",
@@ -88,9 +90,7 @@
           "example": "/config/www/snapshot.jpg"
         },
         "max_tokens": {
-          "name": "Nombre max de tokens",
-          "description": "Le nombre maximum de tokens pour la réponse",
-          "example": "300"
+          "name": "Nombre max de tokens"
         }
       }
     },
@@ -99,8 +99,7 @@
       "description": "Pose une question à un agent Mistral avec des capacités de recherche Web. Retourne une réponse textuelle.",
       "fields": {
         "config_entry": {
-          "name": "Assistant Vocal",
-          "description": "Sélectionnez le pipeline Mistral"
+          "name": "Assistant Vocal"
         },
         "prompt": {
           "name": "Instruction",
@@ -115,10 +114,10 @@
       "message": "Entrée de configuration invalide fournie. Reçu : {config_entry}"
     },
     "cannot_read_path": {
-      "message": "Impossible de lire `{image_path}`, aucun accès au chemin. `allowlist_external_dirs` peut nécessiter d'être ajusté dans `configuration.yaml`"
+      "message": "Impossible de lire `{image_path}`, aucun accès au chemin. `allowlist_external_dirs` peut nécessiter d'être ajusté dans `configuration.yaml`."
     },
     "file_not_found": {
-      "message": "Le fichier `{image_path}` n'existe pas"
+      "message": "Le fichier `{image_path}` n'existe pas."
     },
     "image_encoding_error": {
       "message": "Erreur lors de l'encodage de l'image : {error}"
