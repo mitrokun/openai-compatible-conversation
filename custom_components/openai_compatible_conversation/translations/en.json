@@ -3,36 +3,44 @@
     "step": {
       "user": {
         "data": {
+          "name": "Name",
           "api_key": "API Key",
-          "base_url": "Endpoint"
+          "base_url": "Endpoint URL"
+        },
+        "data_description": {
+          "api_key": "Enter your API key.",
+          "base_url": "Enter the API endpoint. Example: https://openrouter.ai/api/v1/"
         }
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "cannot_connect": "Failed to connect. Please check your connection, endpoint availability, and URL.",
+      "invalid_auth": "Invalid API key.",
+      "unknown": "An unknown error occurred."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "data": {
-          "prompt": "Instructions",
-          "chat_model": "Model",
-          "max_tokens": "Maximum tokens to return in response",
-          "temperature": "Temperature",
-          "top_p": "Top P",
-          "llm_hass_api": "Expose Home Assistant APIs to the LLM",
-          "recommended": "Recommended model settings",
-          "base_url": "Base URL of OpenAI compatible API",
-          "no_think": "Qwen no think",
-          "strip_think_tags": "Hide thinking process"
-        },
-        "data_description": {
-          "prompt": "Instruct how the LLM should respond. This can be a template.",
-          "no_think": "This option disables thinking for qwen models.",
-          "strip_think_tags": "Text within think tags is excluded from the output and history."
+  "config_subentries": {
+    "conversation": {
+      "initiate_flow": {
+        "user": "Add Conversation Agent"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "prompt": "Instructions",
+            "chat_model": "Model",
+            "max_tokens": "Max Response Tokens",
+            "temperature": "Temperature",
+            "top_p": "Top P",
+            "llm_hass_api": "LLM API Access",
+            "no_think": "Disable Qwen 'thinking'",
+            "strip_think_tags": "Hide the thinking process"
+          },
+          "data_description": {
+            "prompt": "Provide the system prompt. Template expressions can be used.",
+            "no_think": "This option disables the 'thinking' stage for Qwen models.",
+            "strip_think_tags": "Text within <think> tags is excluded from the output and history."
+          }
         }
       }
     }
@@ -40,87 +48,58 @@
   "services": {
     "generate_image": {
       "name": "Generate image",
-      "description": "Turn a prompt into an image",
+      "description": "Turns a text query into an image.",
       "fields": {
         "config_entry": {
-          "name": "Config Entry",
-          "description": "The config entry to use for this action"
+          "name": "Configuration entry",
+          "description": "The configuration entry to use for this action."
         },
         "prompt": {
           "name": "Prompt",
-          "description": "The text to turn into an image",
+          "description": "The text to convert into an image.",
           "example": "A photo of a dog"
         },
-        "size": {
-          "name": "Size",
-          "description": "The size of the image to generate"
-        },
-        "quality": {
-          "name": "Quality",
-          "description": "The quality of the image that will be generated"
-        },
-        "style": {
-          "name": "Style",
-          "description": "The style of the generated image"
-        }
+        "size": { "name": "Size" },
+        "quality": { "name": "Quality" },
+        "style": { "name": "Style" }
       }
     },
     "mistral_vision": {
       "name": "Mistral Vision",
-      "description": "Generate a textual description of an image using Mistral AI",
+      "description": "Generate a text description of an image using Mistral AI.",
       "fields": {
-        "config_entry": {
-          "name": "Config Entry",
-          "description": "The config entry to use for this action"
-        },
+        "config_entry": { "name": "Configuration entry" },
         "prompt": {
           "name": "Prompt",
-          "description": "The text prompt to describe the image",
-          "example": "Describe the contents of this image in detail"
+          "description": "The text prompt for describing the image.",
+          "example": "Describe the contents of this image in detail."
         },
         "image_path": {
-          "name": "Image Path",
-          "description": "The path to the image file to be described",
+          "name": "Image path",
+          "description": "Path to the image file to describe.",
           "example": "/config/www/snapshot.jpg"
         },
-        "max_tokens": {
-          "name": "Max Tokens",
-          "description": "The maximum number of tokens for the response",
-          "example": "300"
-        }
+        "max_tokens": { "name": "Max tokens" }
       }
     },
     "web_search": {
       "name": "Web Search",
-      "description": "Asks a question to a Mistral agent with web search capabilities. Returns a text response.",
+      "description": "Asks a question to the Mistral agent with web search capability. Returns a text response.",
       "fields": {
-        "config_entry": {
-          "name": "Voice Assistant",
-          "description": "Select Mistral pipeline"
-        },
+        "config_entry": { "name": "Voice Assistant" },
         "prompt": {
           "name": "Prompt",
           "description": "The question you want to ask the agent.",
-          "example": "What is the current weather in Paris?"
+          "example": "What is the weather like in Mexico right now?"
         }
       }
     }
   },
   "exceptions": {
-    "invalid_config_entry": {
-      "message": "Invalid config entry provided. Got {config_entry}"
-    },
-    "cannot_read_path": {
-      "message": "Cannot read `{image_path}`, no access to path. `allowlist_external_dirs` may need to be adjusted in `configuration.yaml`"
-    },
-    "file_not_found": {
-      "message": "`{image_path}` does not exist"
-    },
-    "image_encoding_error": {
-      "message": "Error encoding image: {error}"
-    },
-    "image_processing_error": {
-      "message": "Error processing image: {error}"
-    }
+    "invalid_config_entry": { "message": "Invalid configuration entry specified. Received: {config_entry}" },
+    "cannot_read_path": { "message": "Cannot read `{image_path}`, path is not accessible. You may need to configure `allowlist_external_dirs` in `configuration.yaml`." },
+    "file_not_found": { "message": "File `{image_path}` does not exist." },
+    "image_encoding_error": { "message": "Error encoding image: {error}" },
+    "image_processing_error": { "message": "Error processing image: {error}" }
   }
 }
