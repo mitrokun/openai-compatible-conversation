@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import base64
-import openai
-import os
-import voluptuous as vol
-import httpx
 import json
+import os
+
+import httpx
+import openai
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
@@ -26,7 +27,14 @@ from homeassistant.helpers import config_validation as cv, selector
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, LOGGER, CONF_BASE_URL, CONF_CHAT_MODEL, CONF_MAX_TOKENS, RECOMMENDED_CHAT_MODEL, RECOMMENDED_MAX_TOKENS
+from .const import (
+    CONF_BASE_URL,
+    CONF_CHAT_MODEL,
+    CONF_MAX_TOKENS,
+    DOMAIN,
+    LOGGER,
+    RECOMMENDED_MAX_TOKENS,
+)
 
 SERVICE_GENERATE_IMAGE = "generate_image"
 SERVICE_MISTRAL_VISION = "mistral_vision"
@@ -64,7 +72,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
 
     http_client = get_async_client(hass)
 
-    # --- 1. Создаем агента, если его еще нет ---
     if not agent_id:
         LOGGER.info("No agent_id found, creating a new web search agent via HTTP...")
         agent_creation_url = "https://api.mistral.ai/v1/agents"
@@ -99,7 +106,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
         except Exception as err:
             raise HomeAssistantError(f"Failed to create Mistral agent: {err}") from err
 
-    # --- 2. Начинаем разговор с агентом ---
     LOGGER.info(f"Starting conversation with agent_id: {agent_id}")
     conversation_url = "https://api.mistral.ai/v1/conversations"
     conversation_payload = {
@@ -125,7 +131,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
             LOGGER.warning("Mistral API returned a non-JSON response. Using raw text as result.")
             return {"text": response.text.strip()}
 
-        # --- 3. УНИВЕРСАЛЬНЫЙ ПАРСЕР ---
         final_text = ""
         if not isinstance(data, dict):
             raise HomeAssistantError(f"Expected a dictionary from API, but got {type(data)}")
@@ -150,7 +155,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
                         final_text = "".join(text_parts)
                         break
         
-        # --- 4. Возвращаем ответ, содержащий только текст ---
         return {"text": final_text.strip()}
 
     except httpx.HTTPStatusError as err:
@@ -290,7 +294,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_MISTRAL_VISION, # <-- Заменил константу на новую
+        SERVICE_MISTRAL_VISION, 
         mistral_vision,
         schema=vol.Schema(
             {
@@ -323,6 +327,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     return True
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEntry) -> bool:
     """Set up OpenAI Compatible Conversation from a config entry."""
     client = openai.AsyncOpenAI(
@@ -344,6 +349,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEn
     entry.runtime_data = client
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload OpenAI."""

@@ -8,6 +8,6 @@
   "documentation": "https://github.com/michelle-avery/openai-compatible-conversation/blob/main/README.md",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "requirements": ["openai>=1.99.2"],
-  "version": "0.0.7"
+  "requirements": ["openai>=1.99.0"],
+  "version": "0.0.8"
 }
