@@ -8,7 +8,6 @@
           "base_url": "Endpoint"
         },
         "data_description": {
-          "name": "Ge den här anslutningen ett beskrivande namn (t.ex. Mistral API).",
           "api_key": "Ange din API-nyckel.",
           "base_url": "Ange API-slutpunkten. Exempel: https://openrouter.ai/api/v1/"
         }
