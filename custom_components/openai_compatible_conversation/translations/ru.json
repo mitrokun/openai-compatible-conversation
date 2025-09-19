@@ -19,7 +19,6 @@
       "unknown": "Произошла неизвестная ошибка."
     },
     "abort": {
-      "reconfigure_successful": "Конфигурация агента обновлена"
     }
   },
   "config_subentries": {
@@ -47,6 +46,9 @@
             "strip_think_tags": "Текст внутри тегов think исключается из вывода и истории."
           }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Конфигурация агента обновлена"
       }
     }
   },
