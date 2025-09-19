@@ -41,7 +41,7 @@
             "name": "Donnez un nom unique et descriptif à cet agent.",
             "prompt": "Spécifiez le prompt système. Vous pouvez utiliser des expressions de modèle.",
             "no_think": "Cette option désactive l'étape de 'réflexion' pour les modèles Qwen.",
-            "strip_think_tags": "Le texte à l'intérieur des balises <think> est exclu de la sortie et de l'historique."
+            "strip_think_tags": "Le texte à l'intérieur des balises think est exclu de la sortie et de l'historique."
           }
         }
       },
