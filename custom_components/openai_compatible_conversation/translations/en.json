@@ -39,7 +39,7 @@
           "data_description": {
             "prompt": "Provide the system prompt. Template expressions can be used.",
             "no_think": "This option disables the 'thinking' stage for Qwen models.",
-            "strip_think_tags": "Text within <think> tags is excluded from the output and history."
+            "strip_think_tags": "Text within think tags is excluded from the output and history."
           }
         }
       },
