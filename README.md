@@ -17,6 +17,6 @@ As development on Home Assistant's built-in OpenAI Conversation Agent has progre
 * OpenAI's reasoning parameters are not supported.
 * The project currently continues to use the `max_tokens` parameter as opposed to the newer `max_completion_tokens` parameter for backwards compatibility.
 
-## Note about changing the model
+### Note about changing the model
 
-The standard model set for use with MistralAI is 'mistral-small-latest'; it is likely that you will need to change this value. To make that happen, click on "configure" on this integration and de-select the "recommended" toggle and click on "send". A placeholder to change the default model will appear and you'll be able to change it to any model you want.
+The standard model set for use with MistralAI is 'mistral-small-latest'; it is likely that you will need to change this value.
