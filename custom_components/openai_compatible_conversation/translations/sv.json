@@ -8,15 +8,15 @@
           "base_url": "Endpoint"
         },
         "data_description": {
-          "api_key": "Ange din API-nyckel.",
+          "api_key": "Ange din API-nyckel",
           "base_url": "Ange API-slutpunkten. Exempel: https://openrouter.ai/api/v1/"
         }
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "cannot_connect": "Det gick inte att ansluta. Kontrollera din anslutning, tillgängligheten till slutpunkten och URL-adressen",
+      "invalid_auth": "Ogiltig API Key",
+      "unknown": "Ett okänt fel uppstod"
     }
   },
   "config_subentries": {
@@ -41,7 +41,7 @@
             "name": "Ge denna agent ett unikt och beskrivande namn.",
             "prompt": "Instruera hur LLM ska svara. Detta kan vara en mall.",
             "no_think": "Detta alternativ inaktiverar tänkande för Qwen-modeller.",
-            "strip_think_tags": "Text inom <think>-taggar utesluts från utdata och historik."
+            "strip_think_tags": "Text inom think-taggar utesluts från utdata och historik."
           }
         }
       },
