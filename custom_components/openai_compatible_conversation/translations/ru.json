@@ -3,8 +3,9 @@
     "step": {
       "user": {
         "data": {
-          "api_key": "API Key",
-          "base_url": "Endpoint"
+          "name": "Имя провайдера",
+          "api_key": "API Ключ",
+          "base_url": "Эндпоинт"
         },
         "data_description": {
           "api_key": "Укажите ключ",
@@ -13,32 +14,41 @@
       }
     },
     "error": {
-      "cannot_connect": "Не удалось подключиться. Проверьте соединение, доступность ресурса и endpoint.",
+      "cannot_connect": "Не удалось подключиться. Проверьте соединение, доступность ресурса и эндпоинт.",
       "invalid_auth": "Неверный API-ключ.",
       "unknown": "Произошла неизвестная ошибка."
+    },
+    "abort": {
     }
   },
-
-  "options": {
-    "step": {
-      "init": {
-        "data": {
-          "prompt": "Инструкции",
-          "chat_model": "Модель",
-          "max_tokens": "Лимит токенов в ответе",
-          "temperature": "Температура",
-          "top_p": "Top P",
-          "llm_hass_api": "Доступ LLM к API",
-          "recommended": "Рекомендуемые настройки модели",
-          "base_url": "Базовый URL OpenAI-совместимого API",
-          "no_think": "Отключить 'размышления' Qwen",
-          "strip_think_tags": "Скрыть процесс размышлений"
-        },
-        "data_description": {
-          "prompt": "Укажите системный промт. Можно использовать шаблонные выражения",
-          "no_think": "Эта опция отключает этап 'размышлений' для моделей Qwen",
-          "strip_think_tags": "Текст внутри тегов think исключается из вывода и истории"
+  "config_subentries": {
+    "conversation": {
+      "initiate_flow": {
+        "user": "Добавить разговорного агента"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "name": "Имя агента",
+            "prompt": "Инструкции",
+            "chat_model": "Модель",
+            "max_tokens": "Лимит токенов в ответе",
+            "temperature": "Температура",
+            "top_p": "Top P",
+            "llm_hass_api": "Доступ LLM к API",
+            "no_think": "Отключить 'размышления' Qwen",
+            "strip_think_tags": "Скрыть процесс размышлений"
+          },
+          "data_description": {
+            "name": "Укажите уникальное и понятное имя для этого агента.",
+            "prompt": "Укажите системный промт. Можно использовать шаблонные выражения.",
+            "no_think": "Эта опция отключает этап 'размышлений' для моделей Qwen.",
+            "strip_think_tags": "Текст внутри тегов think исключается из вывода и истории."
+          }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Конфигурация агента обновлена"
       }
     }
   },
@@ -56,28 +66,16 @@
           "description": "Текст для преобразования в изображение",
           "example": "Фотография собаки"
         },
-        "size": {
-          "name": "Размер",
-          "description": "Размер генерируемого изображения"
-        },
-        "quality": {
-          "name": "Качество",
-          "description": "Качество генерируемого изображения"
-        },
-        "style": {
-          "name": "Стиль",
-          "description": "Стиль генерируемого изображения"
-        }
+        "size": { "name": "Размер" },
+        "quality": { "name": "Качество" },
+        "style": { "name": "Стиль" }
       }
     },
     "mistral_vision": {
       "name": "Mistral Vision",
       "description": "Сгенерировать текстовое описание изображения с помощью Mistral AI",
       "fields": {
-        "config_entry": {
-          "name": "Запись конфигурации",
-          "description": "Запись конфигурации для использования в этом действии"
-        },
+        "config_entry": { "name": "Запись конфигурации" },
         "prompt": {
           "name": "Запрос",
           "description": "Текстовый запрос для описания изображения",
@@ -88,21 +86,14 @@
           "description": "Путь к файлу изображения для описания",
           "example": "/config/www/snapshot.jpg"
         },
-        "max_tokens": {
-          "name": "Максимум токенов",
-          "description": "Максимальное количество токенов в ответе",
-          "example": "300"
-        }
+        "max_tokens": { "name": "Максимум токенов" }
       }
     },
     "web_search": {
       "name": "Поиск в интернете",
       "description": "Задает вопрос агенту Mistral с возможностью поиска в интернете. Возвращает текстовый ответ.",
       "fields": {
-        "config_entry": {
-          "name": "Голосовой ассистент",
-          "description": "Выбирайте пайплайн использующий Mistral"
-        },
+        "config_entry": { "name": "Голосовой ассистент" },
         "prompt": {
           "name": "Запрос",
           "description": "Вопрос, который вы хотите задать агенту.",
@@ -112,20 +103,10 @@
     }
   },
   "exceptions": {
-    "invalid_config_entry": {
-      "message": "Указана неверная запись конфигурации. Получено: {config_entry}"
-    },
-    "cannot_read_path": {
-      "message": "Не удается прочитать `{image_path}`, нет доступа к пути. Возможно, требуется настроить `allowlist_external_dirs` в `configuration.yaml`"
-    },
-    "file_not_found": {
-      "message": "Файл `{image_path}` не существует"
-    },
-    "image_encoding_error": {
-      "message": "Ошибка при кодировании изображения: {error}"
-    },
-    "image_processing_error": {
-      "message": "Ошибка при обработке изображения: {error}"
-    }
+    "invalid_config_entry": { "message": "Указана неверная запись конфигурации. Получено: {config_entry}" },
+    "cannot_read_path": { "message": "Не удается прочитать `{image_path}`, нет доступа к пути. Возможно, требуется настроить `allowlist_external_dirs` в `configuration.yaml`." },
+    "file_not_found": { "message": "Файл `{image_path}` не существует." },
+    "image_encoding_error": { "message": "Ошибка при кодировании изображения: {error}" },
+    "image_processing_error": { "message": "Ошибка при обработке изображения: {error}" }
   }
 }

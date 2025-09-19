@@ -1,3 +1,8 @@
+>[!CAUTION]
+>The new version does not support old entries. Before updating the component, save the agent settings data if required.
+
+The transition to subentry is complete. It is now convenient to create multiple agents for a single provider.
+
 ## In this fork:
 * Streaming support for LLM
 * Fix for Mistral AI

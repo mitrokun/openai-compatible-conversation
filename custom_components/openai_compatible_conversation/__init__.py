@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import base64
-import openai
-import os
-import voluptuous as vol
-import httpx
 import json
+import os
+
+import httpx
+import openai
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
@@ -26,7 +27,14 @@ from homeassistant.helpers import config_validation as cv, selector
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, LOGGER, CONF_BASE_URL, CONF_CHAT_MODEL, CONF_MAX_TOKENS, RECOMMENDED_CHAT_MODEL, RECOMMENDED_MAX_TOKENS
+from .const import (
+    CONF_BASE_URL,
+    CONF_CHAT_MODEL,
+    CONF_MAX_TOKENS,
+    DOMAIN,
+    LOGGER,
+    RECOMMENDED_MAX_TOKENS,
+)
 
 SERVICE_GENERATE_IMAGE = "generate_image"
 SERVICE_MISTRAL_VISION = "mistral_vision"
@@ -39,10 +47,7 @@ type OpenAICompatibleConfigEntry = ConfigEntry[openai.AsyncClient]
 
 
 async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
-    """
-    Задает вопрос агенту Mistral с возможностью поиска в интернете.
-    (остальное описание без изменений)
-    """
+    """Ask a question to the Mistral agent with web search capabilities."""
     entry_id = call.data["config_entry"]
     entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -64,7 +69,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
 
     http_client = get_async_client(hass)
 
-    # --- 1. Создаем агента, если его еще нет ---
     if not agent_id:
         LOGGER.info("No agent_id found, creating a new web search agent via HTTP...")
         agent_creation_url = "https://api.mistral.ai/v1/agents"
@@ -72,9 +76,9 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
             "model": "mistral-medium-latest",
             "name": f"Home Assistant Agent ({entry.title})",
             "instructions": (
-                "Следуй этим инструкциям:\n"
-                "- Для поиска актуальной информации в интернете используй инструмент `web_search`.\n"
-                "- В своем итоговом ответе всегда записывай числовые значения словами, а не цифрами. "
+                "Follow these instructions:\n"
+                "- Use the `web_search` tool for up-to-date information on the internet.\n"
+                "- Always write numerical values as words, not digits, in your final answer."
             ),
             "tools": [{"type": "web_search"}]
         }
@@ -88,9 +92,9 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
             if not agent_id:
                 raise HomeAssistantError("Failed to get agent_id from creation response.")
 
-            LOGGER.info(f"New agent created with ID: {agent_id}")
+            LOGGER.info("New agent created with ID: %s", agent_id)
             
-            new_data = entry.data.copy()
+            new_data = dict(entry.data)
             new_data["agent_id"] = agent_id
             hass.config_entries.async_update_entry(entry, data=new_data)
 
@@ -99,8 +103,7 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
         except Exception as err:
             raise HomeAssistantError(f"Failed to create Mistral agent: {err}") from err
 
-    # --- 2. Начинаем разговор с агентом ---
-    LOGGER.info(f"Starting conversation with agent_id: {agent_id}")
+    LOGGER.info("Starting conversation with agent_id: %s", agent_id)
     conversation_url = "https://api.mistral.ai/v1/conversations"
     conversation_payload = {
         "agent_id": agent_id,
@@ -125,7 +128,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
             LOGGER.warning("Mistral API returned a non-JSON response. Using raw text as result.")
             return {"text": response.text.strip()}
 
-        # --- 3. УНИВЕРСАЛЬНЫЙ ПАРСЕР ---
         final_text = ""
         if not isinstance(data, dict):
             raise HomeAssistantError(f"Expected a dictionary from API, but got {type(data)}")
@@ -133,13 +135,9 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
         for output in data.get("outputs", []):
             if output.get("type") == "message.output":
                 content = output.get("content")
-
-                # Случай 1: content - это одна строка
                 if isinstance(content, str):
                     final_text = content
                     break
-
-                # Случай 2: content - это список из частей
                 elif isinstance(content, list):
                     text_parts = []
                     for chunk in content:
@@ -150,7 +148,6 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
                         final_text = "".join(text_parts)
                         break
         
-        # --- 4. Возвращаем ответ, содержащий только текст ---
         return {"text": final_text.strip()}
 
     except httpx.HTTPStatusError as err:
@@ -162,7 +159,7 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
         )
         raise HomeAssistantError(f"API error during conversation: {err.response.status_code} - {error_body}") from err
     except Exception as err:
-        LOGGER.error("Unexpected error during conversation with agent", exc_info=True)
+        LOGGER.exception("Unexpected error during conversation with agent")
         raise HomeAssistantError(f"Error during conversation with agent: {err}") from err
 
 
@@ -197,7 +194,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise HomeAssistantError(f"Error generating image: {err}") from err
 
         return response.data[0].model_dump(exclude={"b64_json"})
-
 
     async def mistral_vision(call: ServiceCall) -> ServiceResponse:
         """Describe an image using Mistral AI."""
@@ -257,7 +253,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             response = await client.chat.completions.create(
                 model=entry.options.get(CONF_CHAT_MODEL, "mistral-medium-latest"),
                 messages=messages,
-                max_tokens=call.data.get("max_tokens", entry.options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS)),
+                max_tokens=call.data.get("max_tokens", RECOMMENDED_MAX_TOKENS),
             )
             content = response.choices[0].message.content
             return {"text": content if content else ""}
@@ -290,7 +286,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_MISTRAL_VISION, # <-- Заменил константу на новую
+        SERVICE_MISTRAL_VISION,
         mistral_vision,
         schema=vol.Schema(
             {
@@ -308,7 +304,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     async def handle_web_search(call: ServiceCall) -> ServiceResponse:
-        """Асинхронная обертка для правильного вызова сервиса web_search."""
+        """Async wrapper for the web_search service call."""
         return await web_search(hass, call)
 
     hass.services.async_register(
@@ -322,6 +318,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
     return True
+
+
+async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEntry) -> bool:
     """Set up OpenAI Compatible Conversation from a config entry."""
@@ -343,7 +345,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEn
 
     entry.runtime_data = client
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_on_unload(entry.add_update_listener(async_update_listener))
+
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload OpenAI."""
