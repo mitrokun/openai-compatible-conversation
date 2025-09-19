@@ -185,23 +185,21 @@ class ConversationFlowHandler(ConfigSubentryFlow):
             current_data = self._get_reconfigure_subentry().data
 
         if user_input is not None:
-            title = None
-            if is_new:
-                title = user_input.pop(CONF_NAME)
-            
             updated_data = {**current_data, **user_input}
             if updated_data.get(CONF_LLM_HASS_API) == "none":
                 updated_data.pop(CONF_LLM_HASS_API, None)
+
+            # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
+            if is_new:
+                title = updated_data.pop(CONF_NAME)
+                return self.async_create_entry(title=title, data=updated_data)
             
-            result = self.async_create_entry(title=title, data=updated_data)
-
-            if self.source in ("user", "reconfigure"):
-                parent_entry = self._get_entry()
-                self.hass.async_create_task(
-                    self.hass.config_entries.async_reload(parent_entry.entry_id)
-                )
-
-            return result
+            # Если это реконфигурация, обновляем существующую запись
+            return self.async_update_and_abort(
+                self._get_entry(),
+                self._get_reconfigure_subentry(),
+                data=updated_data,
+            )
 
         return self.async_show_form(
             step_id="init",
