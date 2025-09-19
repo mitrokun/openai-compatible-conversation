@@ -42,6 +42,9 @@
             "strip_think_tags": "Text within <think> tags is excluded from the output and history."
           }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Configuration updated"
       }
     }
   },
