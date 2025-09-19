@@ -44,6 +44,9 @@
             "strip_think_tags": "Text inom <think>-taggar utesluts från utdata och historik."
           }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Konfigurationen uppdaterad"
       }
     }
   },
