@@ -44,6 +44,9 @@
             "strip_think_tags": "Le texte à l'intérieur des balises <think> est exclu de la sortie et de l'historique."
           }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Configuration mise à jour"
       }
     }
   },
