@@ -128,7 +128,6 @@ def _convert_content_to_param(
         {"role": content.role, "content": content.content},
     )
 
-
 async def _openai_to_ha_stream(
     stream: AsyncStream[ChatCompletionChunk],
     strip_think_tags: bool,
@@ -153,12 +152,28 @@ async def _openai_to_ha_stream(
             yield {"role": delta.role}
             first_chunk = False
 
+        # Fix: Add support for Mistral's 'magistral' structured streaming (TypeError)
         if delta.content:
-            if not strip_think_tags:
-                yield {"content": delta.content}
+            content_text = ""
+            # Handle both structured (list) and simple (str) content types
+            if isinstance(delta.content, list):
+                # This is a structured response from a reasoning model like Magistral
+                for part in delta.content:
+                    # We only care about the final answer, not the 'thinking' parts
+                    if hasattr(part, "type") and part.type == 'text' and hasattr(part, "text"):
+                        content_text += part.text
+            elif isinstance(delta.content, str):
+                # This is a standard text response
+                content_text = delta.content
+            
+            if not content_text:
                 continue
 
-            buffer += delta.content
+            if not strip_think_tags:
+                yield {"content": content_text}
+                continue
+
+            buffer += content_text
             while True:
                 if is_in_think_block:
                     end_tag_pos = buffer.find(end_tag)
@@ -276,7 +291,6 @@ class OpenAICompatibleConversationEntity(
         conversation.async_unset_agent(self.hass, self.entry)
         await super().async_will_remove_from_hass()
 
-    # --- ИСПРАВЛЕНИЕ №2: Изменена сигнатура метода ---
     async def _async_handle_message(
         self,
         user_input: conversation.ConversationInput,
