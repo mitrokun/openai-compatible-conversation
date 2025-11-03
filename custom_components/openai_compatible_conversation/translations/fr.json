@@ -34,7 +34,7 @@
             "temperature": "Température",
             "top_p": "Top P",
             "llm_hass_api": "Accès LLM à l'API",
-            "enable_kv_cache_fix": "Freeze the promt timestamp",
+            "enable_kv_cache_fix": "Freeze timestamp",
             "no_think": "Désactiver les 'réflexions' de Qwen",
             "strip_think_tags": "Masquer le processus de réflexion"
           },
