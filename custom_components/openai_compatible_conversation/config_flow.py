@@ -58,7 +58,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
     """Validate the user input allows us to connect."""
     client = openai.AsyncOpenAI(api_key=data[CONF_API_KEY], base_url=data[CONF_BASE_URL])

@@ -36,7 +36,7 @@
             "temperature": "Температура",
             "top_p": "Top P",
             "llm_hass_api": "Доступ LLM к API",
-            "enable_kv_cache_fix": "Фиксация timestamp для сессии",
+            "enable_kv_cache_fix": "Фиксация timestamp",
             "no_think": "Отключить 'размышления' Qwen",
             "strip_think_tags": "Скрыть процесс размышлений"
           },

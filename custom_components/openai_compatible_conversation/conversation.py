@@ -429,3 +429,4 @@ class OpenAICompatibleConversationEntity(
                 break
 
         return conversation.async_get_result_from_chat_log(user_input, chat_log)
+
