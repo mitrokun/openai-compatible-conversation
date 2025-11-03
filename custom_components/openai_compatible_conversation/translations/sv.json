@@ -34,6 +34,7 @@
             "temperature": "Temperatur",
             "top_p": "Top P",
             "llm_hass_api": "Exponera Home Assistant APIs till LLM",
+            "enable_kv_cache_fix": "Freeze the promt timestamp",
             "no_think": "Qwen har inget tänkt steg",
             "strip_think_tags": "Dölj tänkeprocess"
           },

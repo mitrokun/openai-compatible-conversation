@@ -19,6 +19,7 @@ from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     SelectOptionDict,
@@ -30,6 +31,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_BASE_URL,
     CONF_CHAT_MODEL,
+    CONF_ENABLE_KV_CACHE_FIX,
     CONF_MAX_TOKENS,
     CONF_NAME,
     CONF_NO_THINK,
@@ -114,10 +116,18 @@ def agent_schema(
                 description={"suggested_value": data.get(CONF_TEMPERATURE)},
                 default=RECOMMENDED_TEMPERATURE,
             ): NumberSelector(NumberSelectorConfig(min=0, max=2, step=0.05)),
-            vol.Required(CONF_NO_THINK, default=data.get(CONF_NO_THINK, False)): bool,
+            vol.Optional(
+                CONF_ENABLE_KV_CACHE_FIX,
+                default=data.get(CONF_ENABLE_KV_CACHE_FIX, False),
+            ): BooleanSelector(),
             vol.Required(
-                CONF_STRIP_THINK_TAGS, default=data.get(CONF_STRIP_THINK_TAGS, False)
-            ): bool,
+                CONF_NO_THINK,
+                default=data.get(CONF_NO_THINK, False)
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_STRIP_THINK_TAGS,
+                default=data.get(CONF_STRIP_THINK_TAGS, False)
+            ): BooleanSelector(),
         }
     )
     return vol.Schema(schema_dict)
@@ -189,12 +199,10 @@ class ConversationFlowHandler(ConfigSubentryFlow):
             if updated_data.get(CONF_LLM_HASS_API) == "none":
                 updated_data.pop(CONF_LLM_HASS_API, None)
 
-            # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
             if is_new:
                 title = updated_data.pop(CONF_NAME)
                 return self.async_create_entry(title=title, data=updated_data)
             
-            # Если это реконфигурация, обновляем существующую запись
             return self.async_update_and_abort(
                 self._get_entry(),
                 self._get_reconfigure_subentry(),

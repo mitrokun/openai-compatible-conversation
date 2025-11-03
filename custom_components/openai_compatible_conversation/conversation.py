@@ -37,6 +37,7 @@ from .const import (
     CONF_NO_THINK,
     CONF_PROMPT,
     CONF_STRIP_THINK_TAGS,
+    CONF_ENABLE_KV_CACHE_FIX,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     DOMAIN,
@@ -146,7 +147,7 @@ async def _openai_to_ha_stream(
             continue
 
         delta = chunk.choices[0].delta
-        LOGGER.debug("Received stream delta: %s", delta)
+        LOGGER.debug("Δ: %s", delta)
 
         if first_chunk and delta.role:
             yield {"role": delta.role}
@@ -262,6 +263,7 @@ class OpenAICompatibleConversationEntity(
         self.subentry = subentry
         self.client = entry.runtime_data
         self.options = subentry.data
+        self.frozen_times = {}
 
         self._attr_unique_id = subentry.subentry_id
         self._attr_device_info = dr.DeviceInfo(
@@ -301,6 +303,7 @@ class OpenAICompatibleConversationEntity(
         assert user_input.agent_id
         options = self.options
         client = self.client
+        conversation_id = chat_log.conversation_id
 
         try:
             await chat_log.async_provide_llm_data(
@@ -312,6 +315,8 @@ class OpenAICompatibleConversationEntity(
         except conversation.ConverseError as err:
             return err.as_conversation_result()
 
+        enable_kv_cache_fix = options.get(CONF_ENABLE_KV_CACHE_FIX, False)
+        
         tools: list[ChatCompletionToolParam] | None = None
         if chat_log.llm_api:
             tools = [
@@ -328,6 +333,50 @@ class OpenAICompatibleConversationEntity(
                 LOGGER.error("Error during history regeneration: %s", err)
                 raise HomeAssistantError(f"Failed to process history: {err}") from err
 
+            # --- Freeze timestamp ---
+            if (
+                enable_kv_cache_fix
+                and _iteration == 0
+                and messages
+                and messages[0].get("role") == "system"
+            ):
+                import re
+
+                time_pattern = re.compile(r"Current time is \d{2}:\d{2}:\d{2}")
+                date_pattern = re.compile(r"Today's date is \d{4}-\d{2}-\d{2}")
+                
+                system_content = messages[0].get("content", "")
+
+                if conversation_id in self.frozen_times:
+                    frozen_context = self.frozen_times[conversation_id]
+                    frozen_time = frozen_context["time"]
+                    frozen_date = frozen_context["date"]
+                    
+                    new_content = time_pattern.sub(frozen_time, system_content, 1)
+                    new_content = date_pattern.sub(frozen_date, new_content, 1)
+                    
+                    if system_content != new_content:
+                        messages[0]["content"] = new_content
+                        # Логирование можно оставить или убрать по желанию
+                        LOGGER.debug("KV-Cache Fix: Replaced dynamic time.")
+                else:
+                    time_match = time_pattern.search(system_content)
+                    date_match = date_pattern.search(system_content)
+                    
+                    if time_match and date_match:
+                        MAX_CACHE_SIZE = 10
+                        if len(self.frozen_times) >= MAX_CACHE_SIZE:
+                            oldest_id = next(iter(self.frozen_times))
+                            del self.frozen_times[oldest_id]
+                            LOGGER.debug("Frozen times cache limit reached. Removed: %s", oldest_id)
+
+                        self.frozen_times[conversation_id] = {
+                            "time": time_match.group(0),
+                            "date": date_match.group(0),
+                        }
+                        LOGGER.debug("KV-Cache Fix: Captured initial context.")
+            # --- end ---
+            
             if _iteration == 0:
                 no_think_enabled = options.get(CONF_NO_THINK, False)
                 if no_think_enabled and messages and messages[-1]["role"] == "user":
@@ -352,7 +401,7 @@ class OpenAICompatibleConversationEntity(
                 "stream": True,
             }
             if not is_mistral:
-                model_args["user"] = chat_log.conversation_id
+                model_args["user"] = conversation_id
 
             try:
                 response_stream = await client.chat.completions.create(**model_args)
