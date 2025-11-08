@@ -1,44 +1,3 @@
-generate_image:
-  fields:
-    config_entry:
-      required: true
-      selector:
-        config_entry:
-          integration: openai_compatible_conversation
-    prompt:
-      required: true
-      selector:
-        text:
-          multiline: true
-    size:
-      required: false
-      example: "1024x1024"
-      default: "1024x1024"
-      selector:
-        select:
-          options:
-            - "1024x1024"
-            - "1024x1792"
-            - "1792x1024"
-    quality:
-      required: false
-      example: "standard"
-      default: "standard"
-      selector:
-        select:
-          options:
-            - "standard"
-            - "hd"
-    style:
-      required: false
-      example: "vivid"
-      default: "vivid"
-      selector:
-        select:
-          options:
-            - "vivid"
-            - "natural"
-
 mistral_vision:
   fields:
     config_entry:
@@ -53,6 +12,10 @@ mistral_vision:
           multiline: true
     image_path:
       required: true
+      selector:
+        text:
+    model:
+      required: false
       selector:
         text:
     max_tokens:
@@ -79,3 +42,28 @@ web_search:
       selector:
         text:
           multiline: true
+
+stream_response:
+  name: Stream Response
+  description: Streams a spoken response from a conversation agent to an Assist satellite.
+  target:
+    entity:
+      domain: assist_satellite
+  fields:
+    agent_entity_id:
+      required: false
+      example: conversation.openai_agent
+      selector:
+        config_entry:
+          integration: openai_compatible_conversation
+    prompt:
+      required: true
+      example: "Tell me a story."
+      selector:
+        text:
+          multiline: true
+    conversation_id:
+      required: false
+      example: "01K9FP1WC2HHV0RVN289YW873C"
+      selector:
+        text:

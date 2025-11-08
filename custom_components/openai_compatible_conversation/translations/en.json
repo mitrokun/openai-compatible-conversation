@@ -50,27 +50,9 @@
     }
   },
   "services": {
-    "generate_image": {
-      "name": "Generate image",
-      "description": "Turns a text query into an image.",
-      "fields": {
-        "config_entry": {
-          "name": "Configuration entry",
-          "description": "The configuration entry to use for this action."
-        },
-        "prompt": {
-          "name": "Prompt",
-          "description": "The text to convert into an image.",
-          "example": "A photo of a dog"
-        },
-        "size": { "name": "Size" },
-        "quality": { "name": "Quality" },
-        "style": { "name": "Style" }
-      }
-    },
     "mistral_vision": {
       "name": "Mistral Vision",
-      "description": "Generate a text description of an image using Mistral AI.",
+      "description": "Generate a text description of an image.",
       "fields": {
         "config_entry": { "name": "Configuration entry" },
         "prompt": {
@@ -83,6 +65,12 @@
           "description": "Path to the image file to describe.",
           "example": "/config/www/snapshot.jpg"
         },
+        "model": {
+          "name": "Модель",
+          "description": "Specify the model for the selected provider. Default: mistral-small-latest",
+          "example": "qwen/qwen3-vl-235b-a22b-instruct"
+        },
+
         "max_tokens": { "name": "Max tokens" }
       }
     },

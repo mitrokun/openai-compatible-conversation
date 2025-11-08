@@ -1,4 +1,7 @@
-"""Conversation support for OpenAI Compatible APIs."""
+# conversation.py
+
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from collections.abc import AsyncGenerator, Callable
 import json
@@ -30,7 +33,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, intent, llm
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import OpenAICompatibleConfigEntry
+if TYPE_CHECKING:
+    from . import OpenAICompatibleConfigEntry
+
 from .const import (
     CONF_CHAT_MODEL,
     CONF_MAX_TOKENS,
@@ -48,6 +53,7 @@ from .const import (
     RECOMMENDED_TOP_P,
 )
 
+# ... (код до класса OpenAICompatibleConversationEntity без изменений)
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10
 
@@ -430,3 +436,72 @@ class OpenAICompatibleConversationEntity(
 
         return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
+    async def async_stream_response(
+        self, user_input: conversation.ConversationInput
+    ) -> AsyncGenerator[str, None]:
+        """Stream the response from the LLM as text chunks."""
+        ### ЛОГИРОВАНИЕ ###
+        LOGGER.debug("async_stream_response вызван с промптом: '%s'", user_input.text)
+
+        chat_log = conversation.ChatLog(self.hass, user_input.conversation_id)
+        chat_log.async_add_user_content(
+            conversation.UserContent(content=user_input.text)
+        )
+
+        try:
+            ### ЛОГИРОВАНИЕ ###
+            LOGGER.debug("Подготовка системного промпта и данных для LLM...")
+            await chat_log.async_provide_llm_data(
+                user_input.as_llm_context(DOMAIN),
+                self.options.get(CONF_LLM_HASS_API),
+                self.options.get(CONF_PROMPT),
+                user_input.extra_system_prompt,
+            )
+            ### ЛОГИРОВАНИЕ ###
+            LOGGER.debug("Системный промпт успешно сформирован.")
+        except conversation.ConverseError:
+            LOGGER.error("Ошибка при подготовке данных для LLM в async_stream_response")
+            return
+
+        messages = [_convert_content_to_param(content) for content in chat_log.content]
+
+        model_args: dict[str, Any] = {
+            "model": self.options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
+            "messages": messages,
+            "max_tokens": self.options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
+            "top_p": self.options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
+            "temperature": self.options.get(
+                CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE
+            ),
+            "stream": True,
+        }
+        ### ЛОГИРОВАНИЕ ###
+        LOGGER.debug("Отправка запроса к LLM API с параметрами: model=%s", model_args['model'])
+        
+        try:
+            response_stream = await self.client.chat.completions.create(**model_args)
+            
+            ### ЛОГИРОВАНИЕ ###
+            first_chunk_received = False
+
+            async for chunk in response_stream:
+                if not chunk.choices:
+                    continue
+
+                delta = chunk.choices[0].delta
+                if content_text := delta.content:
+                    if not first_chunk_received:
+                        ### ЛОГИРОВАНИЕ ###
+                        LOGGER.debug("Получен первый чанк ответа от LLM: '%s...'", content_text[:30])
+                        first_chunk_received = True
+                    yield content_text
+            
+            ### ЛОГИРОВАНИЕ ###
+            LOGGER.debug("Поток ответа от LLM завершен.")
+
+        except openai.OpenAIError as err:
+            LOGGER.error("Ошибка API при потоковой передаче ответа: %s", err)
+            yield "Извините, произошла ошибка при обращении к сервису."
+        except Exception as err:
+            LOGGER.error("Непредвиденная ошибка при потоковой передаче: %s", err)
+            yield "Произошла непредвиденная ошибка."

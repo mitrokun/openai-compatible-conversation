@@ -1,3 +1,5 @@
+# __init__.py
+
 """The OpenAI Compatible Conversation integration."""
 
 from __future__ import annotations
@@ -5,11 +7,13 @@ from __future__ import annotations
 import base64
 import json
 import os
+from typing import Any
 
 import httpx
 import openai
 import voluptuous as vol
 
+# --- Импорты из Home Assistant Core ---
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import (
@@ -23,10 +27,23 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
-from homeassistant.helpers import config_validation as cv, selector
+from homeassistant.helpers import (
+    chat_session,
+    config_validation as cv,
+    entity_registry as er,
+    selector,
+)
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.typing import ConfigType
 
+# --- Импорты из компонентов Home Assistant ---
+from homeassistant.components import conversation as ha_conversation, tts
+from homeassistant.components.assist_pipeline import async_get_pipeline
+from homeassistant.components.assist_satellite.const import (
+    DOMAIN as ASSIST_SATELLITE_DOMAIN,
+)
+
+# --- Импорты из вашей интеграции ---
 from .const import (
     CONF_BASE_URL,
     CONF_CHAT_MODEL,
@@ -35,10 +52,13 @@ from .const import (
     LOGGER,
     RECOMMENDED_MAX_TOKENS,
 )
+from .conversation import OpenAICompatibleConversationEntity
 
+# --- Определяем имена сервисов ---
 SERVICE_GENERATE_IMAGE = "generate_image"
 SERVICE_MISTRAL_VISION = "mistral_vision"
 SERVICE_WEB_SEARCH = "web_search"
+SERVICE_STREAM_RESPONSE = "stream_response"
 
 PLATFORMS = (Platform.CONVERSATION,)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -46,8 +66,9 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 type OpenAICompatibleConfigEntry = ConfigEntry[openai.AsyncClient]
 
 
+# --- Существующий код для web_search ---
 async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
-    """Ask a question to the Mistral agent with web search capabilities."""
+    # ... (код этой функции без изменений)
     entry_id = call.data["config_entry"]
     entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -166,37 +187,10 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up OpenAI Compatible Conversation."""
 
-    async def render_image(call: ServiceCall) -> ServiceResponse:
-        """Render an image with dall-e."""
-        entry_id = call.data["config_entry"]
-        entry = hass.config_entries.async_get_entry(entry_id)
-
-        if entry is None or entry.domain != DOMAIN:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="invalid_config_entry",
-                translation_placeholders={"config_entry": entry_id},
-            )
-
-        client: openai.AsyncClient = entry.runtime_data
-
-        try:
-            response = await client.images.generate(
-                model="dall-e-3",
-                prompt=call.data["prompt"],
-                size=call.data["size"],
-                quality=call.data["quality"],
-                style=call.data["style"],
-                response_format="url",
-                n=1,
-            )
-        except openai.OpenAIError as err:
-            raise HomeAssistantError(f"Error generating image: {err}") from err
-
-        return response.data[0].model_dump(exclude={"b64_json"})
-
+    # --- Существующий код для mistral_vision ---
     async def mistral_vision(call: ServiceCall) -> ServiceResponse:
         """Describe an image using Mistral AI."""
+        # ... (код этой функции без изменений)
         entry_id = call.data["config_entry"]
         entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -250,8 +244,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ]
 
         try:
+            model_to_use = call.data.get("model", "mistral-small-latest")
+
             response = await client.chat.completions.create(
-                model=entry.options.get(CONF_CHAT_MODEL, "mistral-medium-latest"),
+                model=model_to_use,
                 messages=messages,
                 max_tokens=call.data.get("max_tokens", RECOMMENDED_MAX_TOKENS),
             )
@@ -266,26 +262,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_GENERATE_IMAGE,
-        render_image,
-        schema=vol.Schema(
-            {
-                vol.Required("config_entry"): selector.ConfigEntrySelector(
-                    {"integration": DOMAIN}
-                ),
-                vol.Required("prompt"): cv.string,
-                vol.Optional("size", default="1024x1024"): vol.In(
-                    ("1024x1024", "1024x1792", "1792x1024")
-                ),
-                vol.Optional("quality", default="standard"): vol.In(("standard", "hd")),
-                vol.Optional("style", default="vivid"): vol.In(("vivid", "natural")),
-            }
-        ),
-        supports_response=SupportsResponse.ONLY,
-    )
-
-    hass.services.async_register(
-        DOMAIN,
         SERVICE_MISTRAL_VISION,
         mistral_vision,
         schema=vol.Schema(
@@ -295,6 +271,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 ),
                 vol.Required("prompt"): cv.string,
                 vol.Required("image_path"): cv.string,
+                vol.Optional("model"): cv.string,
                 vol.Optional("max_tokens", default=RECOMMENDED_MAX_TOKENS): vol.All(
                     vol.Coerce(int), vol.Range(min=50, max=1000)
                 ),
@@ -303,6 +280,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
 
+    # --- web_search ---
     async def handle_web_search(call: ServiceCall) -> ServiceResponse:
         """Async wrapper for the web_search service call."""
         return await web_search(hass, call)
@@ -317,8 +295,138 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         }),
         supports_response=SupportsResponse.ONLY,
     )
-    return True
 
+    # --- stream_response ---
+    async def handle_stream_response(call: ServiceCall) -> ServiceResponse:
+        """Handle the stream_response service call."""
+        
+        INITIAL_BUFFER_CHAR_COUNT = 30
+        
+        prompt = call.data["prompt"]
+        conversation_id_in = call.data.get("conversation_id")
+
+        with chat_session.async_get_chat_session(hass, conversation_id_in) as session, \
+             ha_conversation.async_get_chat_log(hass, session) as chat_log:
+            
+            conversation_id = session.conversation_id
+            chat_log.async_add_user_content(ha_conversation.UserContent(content=prompt))
+
+            if not (device_ids := call.data.get("device_id")):
+                raise HomeAssistantError("device_id must be specified in 'target'")
+            
+            device_id = (device_ids[0] if isinstance(device_ids, list) else device_ids)
+            
+            ent_reg = er.async_get(hass)
+            device_entries = er.async_entries_for_device(ent_reg, device_id)
+            
+            assist_satellite_entity_id = next(
+                (e.entity_id for e in device_entries if e.domain == "assist_satellite"), None
+            )
+            if not assist_satellite_entity_id:
+                raise HomeAssistantError(f"Could not find an assist_satellite entity for device {device_id}")
+
+            satellite_entity = hass.data.get("assist_satellite").get_entity(assist_satellite_entity_id)
+            pipeline = async_get_pipeline(hass, satellite_entity._resolve_pipeline())
+            
+            conversation_agent_id = call.data.get("agent_entity_id") or pipeline.conversation_engine
+            if not conversation_agent_id:
+                raise HomeAssistantError(f"Agent not specified in service call and not configured in pipeline '{pipeline.name}'")
+
+            agent_entity = hass.data.get("conversation").get_entity(conversation_agent_id)
+            if not isinstance(agent_entity, OpenAICompatibleConversationEntity):
+                raise HomeAssistantError(f"Agent '{conversation_agent_id}' is not an OpenAI Compatible agent.")
+
+            user_input = ha_conversation.ConversationInput(
+                text=prompt, context=call.context, conversation_id=conversation_id,
+                device_id=device_id, satellite_id=assist_satellite_entity_id,
+                language=pipeline.language, agent_id=conversation_agent_id,
+            )
+            
+            text_generator = agent_entity.async_stream_response(user_input)
+            
+            text_iterator = text_generator
+            initial_buffer = []
+            buffered_chars = 0
+            
+            try:
+                async for chunk in text_iterator:
+                    initial_buffer.append(chunk)
+                    buffered_chars += len(chunk)
+                    if buffered_chars >= INITIAL_BUFFER_CHAR_COUNT:
+                        break
+            except StopAsyncIteration:
+                pass
+
+            if not initial_buffer:
+                LOGGER.debug("LLM вернул пустой ответ.")
+                if call.return_response:
+                    return {"response": ""}
+                return None
+
+            initial_buffer_str = "".join(initial_buffer)
+            full_response_parts = [initial_buffer_str]
+
+            async def combined_generator():
+                yield initial_buffer_str
+                async for chunk in text_iterator:
+                    full_response_parts.append(chunk)
+                    yield chunk
+            
+            tts_engine, tts_language, tts_voice = pipeline.tts_engine, pipeline.tts_language, pipeline.tts_voice
+            if not tts_engine:
+                raise HomeAssistantError(f"TTS engine not configured for satellite {assist_satellite_entity_id}")
+            
+            tts_options = {}
+            if tts_voice: tts_options[tts.ATTR_VOICE] = tts_voice
+            tts_stream = tts.async_create_stream(hass, engine=tts_engine, language=tts_language, options=tts_options)
+
+            tts_stream.async_set_message_stream(combined_generator())
+
+            await hass.services.async_call(
+                ASSIST_SATELLITE_DOMAIN, "announce",
+                {"entity_id": assist_satellite_entity_id, "media_id": tts_stream.media_source_id, "preannounce": False},
+                blocking=True,
+                context=call.context,
+            )
+
+            try:
+                async for _ in tts_stream.async_stream_result():
+                    pass
+            except Exception as e:
+                LOGGER.error("Error with TTS stream: %s", e, exc_info=True)
+                raise HomeAssistantError(f"Error while streaming audio: {e}") from e
+
+            full_response_text = "".join(full_response_parts)
+            
+            chat_log.async_add_assistant_content_without_tools(
+                ha_conversation.AssistantContent(content=full_response_text, agent_id=conversation_agent_id)
+            )
+            
+            if call.return_response:
+                return {"response": full_response_text}
+            
+            return None
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_STREAM_RESPONSE,
+        handle_stream_response,
+        schema=vol.Schema(
+            vol.All(
+                {
+                    vol.Optional("agent_entity_id"): cv.entity_id,
+                    vol.Required("prompt"): cv.string,
+                    vol.Optional("conversation_id"): cv.string,
+                    vol.Optional("device_id"): cv.ensure_list,
+                    vol.Optional("area_id"): cv.ensure_list,
+                    vol.Optional("entity_id"): cv.entity_ids,
+                }
+            )
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    return True
 
 async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""

@@ -52,33 +52,9 @@
     }
   },
   "services": {
-    "generate_image": {
-      "name": "Generera bild",
-      "description": "Omvandla en prompt till en bild",
-      "fields": {
-        "config_entry": {
-          "name": "Konfigurationspost",
-          "description": "Konfigurationsposten som ska användas för denna åtgärd"
-        },
-        "prompt": {
-          "name": "Prompt",
-          "description": "Texten som ska omvandlas till en bild",
-          "example": "En bild på en hund"
-        },
-        "size": {
-          "name": "Storlek"
-        },
-        "quality": {
-          "name": "Kvalitet"
-        },
-        "style": {
-          "name": "Stil"
-        }
-      }
-    },
     "mistral_vision": {
       "name": "Mistral Vision",
-      "description": "Generera en textbeskrivning av en bild med hjälp av Mistral AI",
+      "description": "Generera en textbeskrivning av bilden",
       "fields": {
         "config_entry": {
           "name": "Konfigurationspost"
@@ -92,6 +68,11 @@
           "name": "Bildsökväg",
           "description": "Sökvägen till bildfilen som ska beskrivas",
           "example": "/config/www/snapshot.jpg"
+        },
+        "model": {
+          "name": "Модель",
+          "description": "Ange modellen för den valda leverantören. Standard: mistral-small-latest",
+          "example": "qwen/qwen3-vl-235b-a22b-instruct"
         },
         "max_tokens": {
           "name": "Max tokens"

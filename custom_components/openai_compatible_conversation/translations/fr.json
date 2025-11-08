@@ -52,33 +52,9 @@
     }
   },
   "services": {
-    "generate_image": {
-      "name": "Générer une image",
-      "description": "Transformer une instruction textuelle en image",
-      "fields": {
-        "config_entry": {
-          "name": "Entrée de configuration",
-          "description": "L'entrée de configuration à utiliser pour cette action"
-        },
-        "prompt": {
-          "name": "Instruction",
-          "description": "Le texte à transformer en image",
-          "example": "Une photo d'un chien"
-        },
-        "size": {
-          "name": "Taille"
-        },
-        "quality": {
-          "name": "Qualité"
-        },
-        "style": {
-          "name": "Style"
-        }
-      }
-    },
     "mistral_vision": {
       "name": "Vision Mistral",
-      "description": "Générer une description textuelle d'une image en utilisant Mistral AI",
+      "description": "Générer une description textuelle d'une image",
       "fields": {
         "config_entry": {
           "name": "Entrée de configuration"
@@ -92,6 +68,11 @@
           "name": "Chemin de l'image",
           "description": "Le chemin vers le fichier image à décrire",
           "example": "/config/www/snapshot.jpg"
+        },
+        "model": {
+          "name": "Модель",
+          "description": "Indiquez le modèle pour le fournisseur sélectionné. Par défaut : mistral-small-latest",
+          "example": "qwen/qwen3-vl-235b-a22b-instruct"
         },
         "max_tokens": {
           "name": "Nombre max de tokens"

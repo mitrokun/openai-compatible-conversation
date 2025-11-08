@@ -5,6 +5,9 @@
     },
     "web_search": {
       "service": "mdi:search-web"
+    },
+    "stream_response": {
+      "service": "mdi:invoice-fast"
     }
   }
 }
