@@ -23,4 +23,4 @@ RECOMMENDED_BASE_URL = "https://api.mistral.ai/v1/"
 CONF_NO_THINK = "no_think"
 CONF_STRIP_THINK_TAGS = "strip_think_tags"
 CONF_ENABLE_KV_CACHE_FIX = "enable_kv_cache_fix"
-
+SERVICE_GENERATE_STRUCTURED = "generate_structured_data"

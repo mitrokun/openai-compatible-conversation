@@ -8,6 +8,9 @@
     },
     "stream_response": {
       "service": "mdi:invoice-fast"
+    },
+    "generate_structured_data": {
+      "service": "mdi:code-json"
     }
   }
 }

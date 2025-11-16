@@ -108,6 +108,31 @@
           "example": "01K9G0BDVRC0YCKJS29T8PD7M6"
         }
       }
+    },
+    "generate_structured_data": {
+      "name": "Генерация структурированных данных",
+      "description": "Получает структурированный JSON-ответ от LLM на основе схемы.",
+      "fields": {
+        "config_entry": { "name": "Запись конфигурации" },
+        "prompt": {
+          "name": "Промт",
+          "description": "Инструкция для модели."
+        },
+        "image_path": {
+          "name": "Изображение",
+          "description": "Опционально. Укажите путь к изображению."
+        },
+        "json_schema": {
+          "name": "JSON Schema",
+          "description": "Схема ответа модели. См. пример или используйте LLM за создания."
+        },
+        "model": {
+          "name": "Модель",
+          "description": "Укажите для выбранной конфигурации, по умолчанию модель для MistralAI."
+        },
+        "max_tokens": { "name": "Лимит токенов" },
+        "temperature": { "name": "Температура" }
+      }
     }
   },
   "exceptions": {

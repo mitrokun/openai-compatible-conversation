@@ -50,6 +50,7 @@ from .const import (
     CONF_MAX_TOKENS,
     DOMAIN,
     LOGGER,
+    RECOMMENDED_CHAT_MODEL,
     RECOMMENDED_MAX_TOKENS,
 )
 from .conversation import OpenAICompatibleConversationEntity
@@ -59,6 +60,8 @@ SERVICE_GENERATE_IMAGE = "generate_image"
 SERVICE_MISTRAL_VISION = "mistral_vision"
 SERVICE_WEB_SEARCH = "web_search"
 SERVICE_STREAM_RESPONSE = "stream_response"
+SERVICE_GENERATE_STRUCTURED = "generate_structured_data"
+
 
 PLATFORMS = (Platform.CONVERSATION,)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -66,7 +69,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 type OpenAICompatibleConfigEntry = ConfigEntry[openai.AsyncClient]
 
 
-# --- Существующий код для web_search ---
+# --- web_search ---
 async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
     # ... (код этой функции без изменений)
     entry_id = call.data["config_entry"]
@@ -358,7 +361,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 pass
 
             if not initial_buffer:
-                LOGGER.debug("LLM вернул пустой ответ.")
+                LOGGER.debug("LLM returned an empty response.")
                 if call.return_response:
                     return {"response": ""}
                 return None
@@ -426,6 +429,124 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    # --- generate_structured_data ---
+    async def generate_structured_data(call: ServiceCall) -> ServiceResponse:
+        """Generate a structured response using a JSON schema, optionally from an image."""
+
+        def clean_data_recursively(data: Any) -> Any:
+            """Recursively traverse a dict/list and replace non-breaking spaces in strings."""
+            if isinstance(data, str):
+                return data.replace('\xa0', ' ')
+            if isinstance(data, dict):
+                return {k: clean_data_recursively(v) for k, v in data.items()}
+            if isinstance(data, list):
+                return [clean_data_recursively(item) for item in data]
+            return data
+
+        entry_id = call.data["config_entry"]
+        entry = hass.config_entries.async_get_entry(entry_id)
+
+        if entry is None or entry.domain != DOMAIN:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_config_entry",
+                translation_placeholders={"config_entry": entry_id},
+            )
+
+        client: openai.AsyncClient = entry.runtime_data
+        prompt = call.data["prompt"]
+        
+        json_schema = clean_data_recursively(call.data["json_schema"])
+
+        model = call.data.get("model", "mistral-large-latest")
+        image_path = call.data.get("image_path")
+
+        # Умное исправление схемы
+        if json_schema.get("type") == "object" and "additionalProperties" not in json_schema:
+            LOGGER.debug("Adding 'additionalProperties: false' to the schema for API compatibility.")
+            json_schema["additionalProperties"] = False
+
+        content_parts = [{"type": "text", "text": prompt}]
+
+        if image_path:
+            if not hass.config.is_allowed_path(image_path):
+                raise HomeAssistantError(f"Cannot read image from path {image_path}, path not allowed.")
+            
+            if not await hass.async_add_executor_job(os.path.exists, image_path):
+                raise HomeAssistantError(f"Image file not found at {image_path}.")
+
+            try:
+                image_bytes = await hass.async_add_executor_job(
+                    lambda: open(image_path, "rb").read()
+                )
+                base64_image = base64.b64encode(image_bytes).decode('utf-8')
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                })
+            except Exception as e:
+                raise HomeAssistantError(f"Error processing image file: {e}") from e
+
+        messages = [
+            {"role": "user", "content": content_parts}
+        ]
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "structured_data", "strict": True, "schema": json_schema}
+        }
+        
+        content = ""
+        try:
+            LOGGER.debug("Calling chat completions API with cleaned structured response format.")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                response_format=response_format, # type: ignore
+                max_tokens=call.data.get("max_tokens", 2000),
+                temperature=call.data.get("temperature", 0.1),
+            )
+            
+            if not response.choices:
+                LOGGER.error("API returned a successful response but with no choices. Full response: %s", response)
+                raise HomeAssistantError("API returned an empty response. This might be due to a content filter or an API-side issue.")
+
+            content = response.choices[0].message.content
+            if not content:
+                raise HomeAssistantError("Received an empty content from the API.")
+
+            structured_response = json.loads(content)
+            return {"data": structured_response}
+
+        except json.JSONDecodeError as err:
+            LOGGER.error("Failed to decode JSON from API response. Content: %s", content)
+            raise HomeAssistantError(f"Failed to decode JSON from API response: {err}") from err
+        except openai.OpenAIError as err:
+            raise HomeAssistantError(f"API error: {err}") from err
+        except Exception as err:
+            LOGGER.error("Unexpected error during structured data generation: %s", err, exc_info=True)
+            raise HomeAssistantError(f"An unexpected error occurred: {err}") from err
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GENERATE_STRUCTURED,
+        generate_structured_data,
+        schema=vol.Schema(
+            {
+                vol.Required("config_entry"): selector.ConfigEntrySelector(
+                    {"integration": DOMAIN}
+                ),
+                vol.Required("prompt"): cv.string,
+                vol.Optional("image_path"): cv.string,
+                vol.Required("json_schema"): dict,
+                vol.Optional("model"): cv.string,
+                vol.Optional("max_tokens"): cv.positive_int,
+                vol.Optional("temperature"): vol.Coerce(float),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     return True
 
 async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -441,6 +562,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEn
         base_url=entry.data[CONF_BASE_URL],
     )
 
+    # This line seems to be for internal library usage, keeping it.
     _ = await hass.async_add_executor_job(client.platform_headers)
 
     try:

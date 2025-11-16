@@ -1,3 +1,97 @@
+generate_structured_data:
+  name: Generate Structured Data
+  description: "Gets a structured JSON response from the LLM based on a provided schema."
+  fields:
+    config_entry:
+      name: Entry
+      description: "The configuration entry to use for the API call."
+      required: true
+      selector:
+        config_entry:
+          integration: openai_compatible_conversation
+    prompt:
+      name: Prompt
+      description: "The natural language instruction for the model."
+      required: true
+      example: "Analyze this image. If there are any cats, list their location and color. Adhere strictly to the schema.'"
+      selector:
+        text:
+          multiline: true
+    image_path:
+      name: Image Path
+      description: "(Optional) Path to an image file to analyze."
+      required: false
+      example: "/config/www/cats.jpg"
+      selector:
+        text:
+    json_schema:
+      name: JSON Schema
+      description: "The JSON schema that the model's output must follow."
+      required: true
+      example: |
+        type: object
+        properties:
+          is_cat_present:
+            type: boolean
+            description: "Is a cat present in the image?"
+          cat_count:
+            type: integer
+            description: "Total number of cats detected in the image."
+            minimum: 0
+          cats_found:
+            type: array
+            description: "A list of details for each cat found in the image."
+            items:
+              type: object
+              properties:
+                location:
+                  type: string
+                  description: "Cat's location in one of the four corners."
+                  enum:
+                    - top-left
+                    - top-right
+                    - bottom-left
+                    - bottom-right
+                color:
+                  type: string
+                  description: "The dominant color of the cat (e.g., 'black', 'ginger', 'white')."
+              required:
+                - location
+                - color
+        required:
+          - is_cat_present
+          - cat_count
+        additionalProperties: false
+      selector:
+        object:
+    model:
+      name: Model
+      description: "Model to use. Overrides the entry's default."
+      required: false
+      example: "mistral-large-latest"
+      selector:
+        text:
+    max_tokens:
+      name: Max Tokens
+      description: "Maximum number of tokens for the response."
+      required: false
+      default: 1000
+      selector:
+        number:
+          min: 100
+          max: 4096
+          step: 10
+    temperature:
+      name: Temperature
+      description: "Controls response randomness (0.0 to 2.0)."
+      required: false
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 2.0
+          step: 0.05
+
 mistral_vision:
   fields:
     config_entry:
