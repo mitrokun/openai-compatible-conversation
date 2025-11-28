@@ -10,6 +10,14 @@ The transition to subentry is complete. It is now convenient to create multiple 
 * Mistral Web serch agent
 * Timestamp fixation for each conversation session
 
+and
+* stream_response action
+
+  *usage diagram* + [demo](https://www.youtube.com/watch?v=vQDfhO5xkgw)
+
+<img width="892" height="429" alt="image" src="https://github.com/user-attachments/assets/673aa070-edc8-4791-91d6-9fcc475b45ee" />
+
+
 # OpenAI Compatible Conversation
 This project started off as a copy of Home Assistant's built-in OpenAI Conversation Agent, with support for changing the base URL. Only the minimal changes to make this a standalone custom component capable of supporting a different base URL to make it compatible with other services offering an OpenAI-compatible API were  made.
 
