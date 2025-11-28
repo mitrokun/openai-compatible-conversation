@@ -17,6 +17,9 @@ and
 
 <img width="892" height="429" alt="image" src="https://github.com/user-attachments/assets/673aa070-edc8-4791-91d6-9fcc475b45ee" />
 
+It is possible to use the action directly in automation, but then the system will not be able to end the session correctly. This is not critical, but it is not ideal. When using this activation option, the session will be interrupted at the intent processing stage, which can be observed in the agent's debug menu (it can be said that the announcement interrupts the rigid structure of voice automation). 
+
+
 
 # OpenAI Compatible Conversation
 This project started off as a copy of Home Assistant's built-in OpenAI Conversation Agent, with support for changing the base URL. Only the minimal changes to make this a standalone custom component capable of supporting a different base URL to make it compatible with other services offering an OpenAI-compatible API were  made.
