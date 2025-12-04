@@ -1,11 +1,12 @@
 # conversation.py
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable
 import json
-from typing import Any, Literal, cast
+import logging
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import openai
 from openai import AsyncStream
@@ -30,7 +31,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, intent, llm
+from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 if TYPE_CHECKING:
@@ -46,14 +47,14 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_TOP_P,
     DOMAIN,
-    LOGGER,
     RECOMMENDED_CHAT_MODEL,
     RECOMMENDED_MAX_TOKENS,
     RECOMMENDED_TEMPERATURE,
     RECOMMENDED_TOP_P,
 )
 
-# ... (код до класса OpenAICompatibleConversationEntity без изменений)
+LOGGER = logging.getLogger(__name__)
+
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10
 
@@ -86,13 +87,34 @@ def _format_tool(
 
 def _convert_content_to_param(
     content: conversation.Content,
+    tool_id_mapping: dict[str, str] | None = None,
 ) -> ChatCompletionMessageParam:
     """Convert any native chat message for this agent to the native format."""
+
+    def get_mistral_id(original_id: str) -> str:
+        # If mapping is not provided (not Mistral), return original
+        if tool_id_mapping is None:
+            return original_id
+        
+        # If ID is already mapped, return the cached short version
+        if original_id in tool_id_mapping:
+            return tool_id_mapping[original_id]
+        
+        # Take the last 9 characters
+        clean_id = original_id[-9:] if len(original_id) >= 9 else original_id.ljust(9, "0")
+        
+        # Fallback
+        if clean_id in tool_id_mapping.values():
+            clean_id = original_id[:9]
+            
+        tool_id_mapping[original_id] = clean_id
+        return clean_id
+
     if content.role == "tool_result":
         assert isinstance(content, conversation.ToolResultContent)
         return ChatCompletionToolMessageParam(
             role="tool",
-            tool_call_id=content.tool_call_id,
+            tool_call_id=get_mistral_id(content.tool_call_id),
             content=json.dumps(content.tool_result),
         )
 
@@ -110,7 +132,7 @@ def _convert_content_to_param(
                 content=content.content if content.content else None,
                 tool_calls=[
                     ChatCompletionMessageFunctionToolCallParam(
-                        id=tool_call.id,
+                        id=get_mistral_id(tool_call.id),
                         function=Function(
                             arguments=json.dumps(tool_call.tool_args),
                             name=tool_call.tool_name,
@@ -134,6 +156,7 @@ def _convert_content_to_param(
         ChatCompletionMessageParam,
         {"role": content.role, "content": content.content},
     )
+
 
 async def _openai_to_ha_stream(
     stream: AsyncStream[ChatCompletionChunk],
@@ -159,18 +182,13 @@ async def _openai_to_ha_stream(
             yield {"role": delta.role}
             first_chunk = False
 
-        # Fix: Add support for Mistral's 'magistral' structured streaming (TypeError)
         if delta.content:
             content_text = ""
-            # Handle both structured (list) and simple (str) content types
             if isinstance(delta.content, list):
-                # This is a structured response from a reasoning model like Magistral
                 for part in delta.content:
-                    # We only care about the final answer, not the 'thinking' parts
                     if hasattr(part, "type") and part.type == 'text' and hasattr(part, "text"):
                         content_text += part.text
             elif isinstance(delta.content, str):
-                # This is a standard text response
                 content_text = delta.content
             
             if not content_text:
@@ -330,10 +348,18 @@ class OpenAICompatibleConversationEntity(
                 for tool in chat_log.llm_api.tools
             ]
 
+        # Determine if we are using Mistral (affects ID generation and 'user' field)
+        base_url = str(getattr(client, "base_url", ""))
+        is_mistral = "mistral.ai" in base_url.lower()
+
         for _iteration in range(MAX_TOOL_ITERATIONS):
+            # Create mapping dict for Mistral, otherwise None
+            tool_id_mapping = {} if is_mistral else None
+
             try:
                 messages = [
-                    _convert_content_to_param(content) for content in chat_log.content
+                    _convert_content_to_param(content, tool_id_mapping) 
+                    for content in chat_log.content
                 ]
             except Exception as err:
                 LOGGER.error("Error during history regeneration: %s", err)
@@ -363,8 +389,6 @@ class OpenAICompatibleConversationEntity(
                     
                     if system_content != new_content:
                         messages[0]["content"] = new_content
-                        # Логирование можно оставить или убрать по желанию
-                        LOGGER.debug("KV-Cache Fix: Replaced dynamic time.")
                 else:
                     time_match = time_pattern.search(system_content)
                     date_match = date_pattern.search(system_content)
@@ -374,13 +398,11 @@ class OpenAICompatibleConversationEntity(
                         if len(self.frozen_times) >= MAX_CACHE_SIZE:
                             oldest_id = next(iter(self.frozen_times))
                             del self.frozen_times[oldest_id]
-                            LOGGER.debug("Frozen times cache limit reached. Removed: %s", oldest_id)
 
                         self.frozen_times[conversation_id] = {
                             "time": time_match.group(0),
                             "date": date_match.group(0),
                         }
-                        LOGGER.debug("KV-Cache Fix: Captured initial context.")
             # --- end ---
             
             if _iteration == 0:
@@ -390,9 +412,6 @@ class OpenAICompatibleConversationEntity(
                     current_content = str(user_message.get("content", ""))
                     if not current_content.endswith("/no_think"):
                         user_message["content"] = current_content + "/no_think"
-
-            base_url = str(getattr(client, "base_url", ""))
-            is_mistral = "mistral.ai" in base_url.lower()
 
             model_args: dict[str, Any] = {
                 "model": options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
@@ -406,30 +425,49 @@ class OpenAICompatibleConversationEntity(
                 ),
                 "stream": True,
             }
+
+            # Do not send 'user' field for Mistral
             if not is_mistral:
                 model_args["user"] = conversation_id
 
-            try:
-                response_stream = await client.chat.completions.create(**model_args)
-                strip_tags = options.get(CONF_STRIP_THINK_TAGS, False)
-                async for _ in chat_log.async_add_delta_content_stream(
-                    user_input.agent_id,
-                    _openai_to_ha_stream(response_stream, strip_think_tags=strip_tags),
-                ):
-                    pass
+            max_retries = 1
+            retry_delay_s = 1
 
-            except openai.RateLimitError as err:
-                LOGGER.error("Rate limited by API: %s", err)
-                raise HomeAssistantError("Rate limited or insufficient funds") from err
-            except openai.OpenAIError as err:
-                LOGGER.error("Error talking to API: %s", err)
-                error_body = getattr(err, "body", None)
-                if error_body:
-                    LOGGER.error("API Error Body: %s", error_body)
-                raise HomeAssistantError(f"Error talking to API: {err}") from err
-            except Exception as err:
-                LOGGER.error("Unexpected streaming error: %s", err)
-                raise HomeAssistantError(f"An unexpected error occurred: {err}") from err
+            for attempt in range(max_retries):
+                try:
+                    response_stream = await client.chat.completions.create(**model_args)
+                    strip_tags = options.get(CONF_STRIP_THINK_TAGS, False)
+                    async for _ in chat_log.async_add_delta_content_stream(
+                        user_input.agent_id,
+                        _openai_to_ha_stream(response_stream, strip_think_tags=strip_tags),
+                    ):
+                        pass
+                    
+                    break
+
+                except openai.RateLimitError as err:
+                    if attempt + 1 == max_retries:
+                        LOGGER.error("Rate limit error after %d attempts: %s", max_retries, err)
+                        raise HomeAssistantError("Rate limited or insufficient funds") from err
+                    
+                    LOGGER.debug(
+                        "Rate limited by API. Attempt %d of %d. Retrying in %d s...",
+                        attempt + 1,
+                        max_retries,
+                        retry_delay_s,
+                    )
+                    await asyncio.sleep(retry_delay_s)
+
+                except openai.OpenAIError as err:
+                    LOGGER.error("Error talking to API: %s", err)
+                    error_body = getattr(err, "body", None)
+                    if error_body:
+                        LOGGER.error("API Error Body: %s", error_body)
+                    raise HomeAssistantError(f"Error talking to API: {err}") from err
+                
+                except Exception as err:
+                    LOGGER.error("Unexpected streaming error: %s", err)
+                    raise HomeAssistantError(f"An unexpected error occurred: {err}") from err
 
             if not chat_log.unresponded_tool_results:
                 break
@@ -440,30 +478,29 @@ class OpenAICompatibleConversationEntity(
         self, user_input: conversation.ConversationInput
     ) -> AsyncGenerator[str, None]:
         """Stream the response from the LLM as text chunks."""
-        ### ЛОГИРОВАНИЕ ###
-        LOGGER.debug("async_stream_response вызван с промптом: '%s'", user_input.text)
-
         chat_log = conversation.ChatLog(self.hass, user_input.conversation_id)
         chat_log.async_add_user_content(
             conversation.UserContent(content=user_input.text)
         )
 
         try:
-            ### ЛОГИРОВАНИЕ ###
-            LOGGER.debug("Подготовка системного промпта и данных для LLM...")
             await chat_log.async_provide_llm_data(
                 user_input.as_llm_context(DOMAIN),
                 self.options.get(CONF_LLM_HASS_API),
                 self.options.get(CONF_PROMPT),
                 user_input.extra_system_prompt,
             )
-            ### ЛОГИРОВАНИЕ ###
-            LOGGER.debug("Системный промпт успешно сформирован.")
         except conversation.ConverseError:
-            LOGGER.error("Ошибка при подготовке данных для LLM в async_stream_response")
             return
 
-        messages = [_convert_content_to_param(content) for content in chat_log.content]
+        base_url = str(getattr(self.client, "base_url", ""))
+        is_mistral = "mistral.ai" in base_url.lower()
+        tool_id_mapping = {} if is_mistral else None
+
+        messages = [
+            _convert_content_to_param(content, tool_id_mapping) 
+            for content in chat_log.content
+        ]
 
         model_args: dict[str, Any] = {
             "model": self.options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
@@ -475,33 +512,19 @@ class OpenAICompatibleConversationEntity(
             ),
             "stream": True,
         }
-        ### ЛОГИРОВАНИЕ ###
-        LOGGER.debug("Отправка запроса к LLM API с параметрами: model=%s", model_args['model'])
         
         try:
             response_stream = await self.client.chat.completions.create(**model_args)
-            
-            ### ЛОГИРОВАНИЕ ###
-            first_chunk_received = False
-
             async for chunk in response_stream:
                 if not chunk.choices:
                     continue
-
                 delta = chunk.choices[0].delta
                 if content_text := delta.content:
-                    if not first_chunk_received:
-                        ### ЛОГИРОВАНИЕ ###
-                        LOGGER.debug("Получен первый чанк ответа от LLM: '%s...'", content_text[:30])
-                        first_chunk_received = True
                     yield content_text
-            
-            ### ЛОГИРОВАНИЕ ###
-            LOGGER.debug("Поток ответа от LLM завершен.")
 
         except openai.OpenAIError as err:
-            LOGGER.error("Ошибка API при потоковой передаче ответа: %s", err)
-            yield "Извините, произошла ошибка при обращении к сервису."
+            LOGGER.error("API error during streaming: %s", err)
+            yield "Sorry, an error occurred while talking to the AI service."
         except Exception as err:
-            LOGGER.error("Непредвиденная ошибка при потоковой передаче: %s", err)
-            yield "Произошла непредвиденная ошибка."
+            LOGGER.error("Unexpected error during streaming: %s", err)
+            yield "An unexpected error occurred."
