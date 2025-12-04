@@ -107,7 +107,7 @@ def _convert_content_to_param(
         if content.tool_calls:
             return ChatCompletionAssistantMessageParam(
                 role="assistant",
-                content=content.content or "",
+                content=content.content if content.content else None,
                 tool_calls=[
                     ChatCompletionMessageFunctionToolCallParam(
                         id=tool_call.id,
