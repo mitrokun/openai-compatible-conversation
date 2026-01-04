@@ -353,7 +353,7 @@ class OpenAICompatibleConversationEntity(
         is_mistral = "mistral.ai" in base_url.lower()
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
-            # === HISTORY SANITIZER (Лечение истории HA) ===
+            # === HISTORY SANITIZER ===
             # ВАЖНО: Выполняем внутри цикла, чтобы видеть свежие изменения в chat_log
             sanitized_content_list = []
             raw_content = chat_log.content
@@ -394,11 +394,11 @@ class OpenAICompatibleConversationEntity(
                 if isinstance(item, conversation.AssistantContent) and item.tool_calls:
                     next_item = raw_content[i + 1] if i + 1 < len(raw_content) else None
                     
-                    # Если следом идет НЕ результат (разрыв цепи из-за бага HA)
+                    # Если следом идет НЕ результат
                     if not isinstance(next_item, conversation.ToolResultContent):
                         LOGGER.debug("Sanitizer: Injecting fake ToolResult for broken chain.")
                         
-                        # 1. Вставляем фейковый результат с инструкцией для LLM НЕ ПОВТОРЯТЬ
+                        # 1. Вставляем фейковый результат с инструкцией для LLM
                         for tool_call in item.tool_calls:
                             fake_result = conversation.ToolResultContent(
                                 agent_id=item.agent_id,
@@ -535,7 +535,7 @@ class OpenAICompatibleConversationEntity(
             if not chat_log.unresponded_tool_results:
                 break
         
-        # --- НАЧАЛО ФИКСА ---
+        # --- Фикс на выполнение build-in комманд после ответа LLM с вопросом  ---
         
         result = conversation.async_get_result_from_chat_log(user_input, chat_log)
 
@@ -562,14 +562,15 @@ class OpenAICompatibleConversationEntity(
             self.hass.loop.call_later(0.5, sabotage_agent_lock)
 
         return result
- #       return conversation.async_get_result_from_chat_log(user_input, chat_log)
+        # --- end  ---
+        # return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
     async def async_stream_response(
         self,
         user_input: conversation.ConversationInput,
         max_tokens_override: int | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream the response from the LLM as text chunks."""
+        """Stream the response from the LLM as text chunks."""  
         chat_log = conversation.ChatLog(self.hass, user_input.conversation_id)
         chat_log.async_add_user_content(
             conversation.UserContent(content=user_input.text)
