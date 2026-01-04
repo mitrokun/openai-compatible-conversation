@@ -570,7 +570,7 @@ class OpenAICompatibleConversationEntity(
         user_input: conversation.ConversationInput,
         max_tokens_override: int | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream the response from the LLM as text chunks."""  
+        """Stream the response from the LLM as text chunks."""
         chat_log = conversation.ChatLog(self.hass, user_input.conversation_id)
         chat_log.async_add_user_content(
             conversation.UserContent(content=user_input.text)
@@ -623,3 +623,4 @@ class OpenAICompatibleConversationEntity(
         except Exception as err:
             LOGGER.error("Unexpected error during streaming: %s", err)
             yield "An unexpected error occurred."
+            
