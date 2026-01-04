@@ -29,7 +29,7 @@ from voluptuous_openapi import convert
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -353,13 +353,80 @@ class OpenAICompatibleConversationEntity(
         is_mistral = "mistral.ai" in base_url.lower()
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
+            # === HISTORY SANITIZER (Лечение истории HA) ===
+            # ВАЖНО: Выполняем внутри цикла, чтобы видеть свежие изменения в chat_log
+            sanitized_content_list = []
+            raw_content = chat_log.content
+            
+            i = 0
+            while i < len(raw_content):
+                item = raw_content[i]
+
+                # [FIX START] Удаление "сирот" (Orphaned Tool Results)
+                # Если текущий элемент - результат инструмента, но предыдущий элемент в списке
+                # НЕ является Ассистентом (с вызовами) или другим Результатом, значит
+                # этот результат "оторвался" (например, из-за вклинившегося User message).
+                # Мы его пропускаем, чтобы не ломать структуру API.
+                if isinstance(item, conversation.ToolResultContent):
+                    prev = sanitized_content_list[-1] if sanitized_content_list else None
+                    
+                    # Валидный родитель: Assistant с tool_calls ИЛИ другой ToolResult (в случае параллельных вызовов)
+                    is_valid_parent = False
+                    if prev:
+                        if isinstance(prev, conversation.AssistantContent) and prev.tool_calls:
+                            is_valid_parent = True
+                        elif isinstance(prev, conversation.ToolResultContent):
+                            is_valid_parent = True
+                    
+                    if not is_valid_parent:
+                        LOGGER.debug(
+                            "Sanitizer: Dropping orphaned ToolResult (ID: %s). Previous role was: %s", 
+                            item.tool_call_id, 
+                            prev.role if prev else "None"
+                        )
+                        i += 1
+                        continue
+                # [FIX END]
+
+                sanitized_content_list.append(item)
+                
+                # Если это сообщение с вызовом инструментов
+                if isinstance(item, conversation.AssistantContent) and item.tool_calls:
+                    next_item = raw_content[i + 1] if i + 1 < len(raw_content) else None
+                    
+                    # Если следом идет НЕ результат (разрыв цепи из-за бага HA)
+                    if not isinstance(next_item, conversation.ToolResultContent):
+                        LOGGER.debug("Sanitizer: Injecting fake ToolResult for broken chain.")
+                        
+                        # 1. Вставляем фейковый результат с инструкцией для LLM НЕ ПОВТОРЯТЬ
+                        for tool_call in item.tool_calls:
+                            fake_result = conversation.ToolResultContent(
+                                agent_id=item.agent_id,
+                                tool_call_id=tool_call.id,
+                                tool_name=tool_call.tool_name,
+                                tool_result={
+                                    "error": "Internal handler failed. Do not retry."
+                                }
+                            )
+                            sanitized_content_list.append(fake_result)
+                        
+                        # 2. Вставляем фейковый ответ ассистента (для Mistral)
+                        fake_assistant_response = conversation.AssistantContent(
+                            agent_id=item.agent_id,
+                            content="The command returned no result."
+                        )
+                        sanitized_content_list.append(fake_assistant_response)
+                
+                i += 1
+            # ===============================================
+
             # Create mapping dict for Mistral, otherwise None
             tool_id_mapping = {} if is_mistral else None
 
             try:
                 messages = [
                     _convert_content_to_param(content, tool_id_mapping) 
-                    for content in chat_log.content
+                    for content in sanitized_content_list
                 ]
             except Exception as err:
                 LOGGER.error("Error during history regeneration: %s", err)
@@ -373,32 +440,23 @@ class OpenAICompatibleConversationEntity(
                 and messages[0].get("role") == "system"
             ):
                 import re
-
                 time_pattern = re.compile(r"Current time is \d{2}:\d{2}:\d{2}")
                 date_pattern = re.compile(r"Today's date is \d{4}-\d{2}-\d{2}")
-                
                 system_content = messages[0].get("content", "")
 
                 if conversation_id in self.frozen_times:
                     frozen_context = self.frozen_times[conversation_id]
-                    frozen_time = frozen_context["time"]
-                    frozen_date = frozen_context["date"]
-                    
-                    new_content = time_pattern.sub(frozen_time, system_content, 1)
-                    new_content = date_pattern.sub(frozen_date, new_content, 1)
-                    
+                    new_content = time_pattern.sub(frozen_context["time"], system_content, 1)
+                    new_content = date_pattern.sub(frozen_context["date"], new_content, 1)
                     if system_content != new_content:
                         messages[0]["content"] = new_content
                 else:
                     time_match = time_pattern.search(system_content)
                     date_match = date_pattern.search(system_content)
-                    
                     if time_match and date_match:
                         MAX_CACHE_SIZE = 10
                         if len(self.frozen_times) >= MAX_CACHE_SIZE:
-                            oldest_id = next(iter(self.frozen_times))
-                            del self.frozen_times[oldest_id]
-
+                            del self.frozen_times[next(iter(self.frozen_times))]
                         self.frozen_times[conversation_id] = {
                             "time": time_match.group(0),
                             "date": date_match.group(0),
@@ -430,7 +488,12 @@ class OpenAICompatibleConversationEntity(
             if not is_mistral:
                 model_args["user"] = conversation_id
 
-            max_retries = 1
+            LOGGER.debug(
+                "FULL LLM REQUEST:\n%s", 
+                json.dumps(model_args, indent=2, ensure_ascii=False, default=str)
+            )
+
+            max_retries = 3
             retry_delay_s = 1
 
             for attempt in range(max_retries):
@@ -471,11 +534,40 @@ class OpenAICompatibleConversationEntity(
 
             if not chat_log.unresponded_tool_results:
                 break
+        
+        # --- НАЧАЛО ФИКСА ---
+        
+        result = conversation.async_get_result_from_chat_log(user_input, chat_log)
 
-        return conversation.async_get_result_from_chat_log(user_input, chat_log)
+        if chat_log.continue_conversation:
+            KEY_PIPELINE_DATA = "pipeline_conversation_data"
+            conv_id = chat_log.conversation_id
+            
+            # LOGGER.debug(f"Sabotage: Scheduled lock removal for {conv_id}")
+
+            @callback
+            def sabotage_agent_lock():
+                try:
+                    pipeline_data = self.hass.data.get(KEY_PIPELINE_DATA)
+                    if not pipeline_data: return
+
+                    data_entry = pipeline_data.get(conv_id)
+                    if data_entry and data_entry.continue_conversation_agent:
+                        # LOGGER.debug(f"Sabotage: REMOVING LOCK for {conv_id}")
+                        data_entry.continue_conversation_agent = None
+                        
+                except Exception:
+                    pass
+
+            self.hass.loop.call_later(0.5, sabotage_agent_lock)
+
+        return result
+ #       return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
     async def async_stream_response(
-        self, user_input: conversation.ConversationInput
+        self,
+        user_input: conversation.ConversationInput,
+        max_tokens_override: int | None = None
     ) -> AsyncGenerator[str, None]:
         """Stream the response from the LLM as text chunks."""
         chat_log = conversation.ChatLog(self.hass, user_input.conversation_id)
@@ -502,10 +594,12 @@ class OpenAICompatibleConversationEntity(
             for content in chat_log.content
         ]
 
+        max_tokens = max_tokens_override if max_tokens_override else self.options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS)
+
         model_args: dict[str, Any] = {
             "model": self.options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
             "messages": messages,
-            "max_tokens": self.options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
+            "max_tokens": max_tokens,
             "top_p": self.options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
             "temperature": self.options.get(
                 CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE

@@ -161,3 +161,11 @@ stream_response:
       example: "01K9FP1WC2HHV0RVN289YW873C"
       selector:
         text:
+    max_tokens:
+      required: false
+      example: 2000
+      selector:
+        number:
+          min: 100
+          max: 8000
+          mode: box

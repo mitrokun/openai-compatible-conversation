@@ -305,14 +305,30 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         
         INITIAL_BUFFER_CHAR_COUNT = 30
         
-        prompt = call.data["prompt"]
+        full_prompt = call.data["prompt"]
         conversation_id_in = call.data.get("conversation_id")
+        max_tokens = call.data.get("max_tokens")
+
+
+        def get_history_friendly_prompt(text: str) -> str:
+            if len(text) < 200 and "\n" not in text:
+                return text
+            
+            first_line = text.split('\n')[0].strip()
+            
+            if len(first_line) > 200:
+                return first_line[:200] + "... [original data intentionally excluded]"
+            
+            return first_line + " ... [original data intentionally excluded]"
+        
+        history_prompt = get_history_friendly_prompt(full_prompt)
+
 
         with chat_session.async_get_chat_session(hass, conversation_id_in) as session, \
              ha_conversation.async_get_chat_log(hass, session) as chat_log:
             
             conversation_id = session.conversation_id
-            chat_log.async_add_user_content(ha_conversation.UserContent(content=prompt))
+            chat_log.async_add_user_content(ha_conversation.UserContent(content=history_prompt))
 
             if not (device_ids := call.data.get("device_id")):
                 raise HomeAssistantError("device_id must be specified in 'target'")
@@ -340,12 +356,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 raise HomeAssistantError(f"Agent '{conversation_agent_id}' is not an OpenAI Compatible agent.")
 
             user_input = ha_conversation.ConversationInput(
-                text=prompt, context=call.context, conversation_id=conversation_id,
-                device_id=device_id, satellite_id=assist_satellite_entity_id,
-                language=pipeline.language, agent_id=conversation_agent_id,
+                text=full_prompt,
+                context=call.context, 
+                conversation_id=conversation_id,
+                device_id=device_id, 
+                satellite_id=assist_satellite_entity_id,
+                language=pipeline.language, 
+                agent_id=conversation_agent_id,
             )
-            
-            text_generator = agent_entity.async_stream_response(user_input)
+
+            text_generator = agent_entity.async_stream_response(
+                user_input, 
+                max_tokens_override=max_tokens
+            )
             
             text_iterator = text_generator
             initial_buffer = []
@@ -423,6 +446,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     vol.Optional("device_id"): cv.ensure_list,
                     vol.Optional("area_id"): cv.ensure_list,
                     vol.Optional("entity_id"): cv.entity_ids,
+                    vol.Optional("max_tokens"): cv.positive_int,
                 }
             )
         ),
