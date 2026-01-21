@@ -13,7 +13,6 @@ from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionChunk,
     ChatCompletionMessageParam,
-    ChatCompletionMessageToolCallParam,
     ChatCompletionToolMessageParam,
     ChatCompletionToolParam,
 )
@@ -74,9 +73,12 @@ def _format_tool(
     tool: llm.Tool, custom_serializer: Callable[[Any], Any] | None
 ) -> ChatCompletionToolParam:
     """Format tool specification."""
+    
+    serializer = custom_serializer if custom_serializer else llm.selector_serializer
+
     tool_spec = FunctionDefinition(
         name=tool.name,
-        parameters=convert(tool.parameters, custom_serializer=custom_serializer),
+        parameters=convert(tool.parameters, custom_serializer=serializer),
     )
     if tool.description:
         tool_spec["description"] = tool.description
