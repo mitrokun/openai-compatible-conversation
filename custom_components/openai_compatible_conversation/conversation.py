@@ -435,7 +435,8 @@ class OpenAICompatibleConversationEntity(
             # --- Freeze timestamp ---
             if (
                 enable_kv_cache_fix
-                and _iteration == 0
+                # If the tools require the current time, uncomment it.
+                # and _iteration == 0
                 and messages
                 and messages[0].get("role") == "system"
             ):
