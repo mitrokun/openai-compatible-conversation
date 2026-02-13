@@ -6,8 +6,9 @@ The transition to subentry is complete. It is now convenient to create multiple 
 ## In this fork:
 * Streaming support for LLM
 * Fix for Mistral AI
-* Mistral Vision action
 * Mistral Web serch agent
+* Mistral Vision action (works with any vision models)
+* Action for structural queries (same as ai_task)
 * Timestamp fixation for each conversation session
 
 and
