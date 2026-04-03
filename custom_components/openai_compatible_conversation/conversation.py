@@ -28,6 +28,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.json import json_dumps
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -115,7 +116,7 @@ def _convert_content_to_param(
         return ChatCompletionToolMessageParam(
             role="tool",
             tool_call_id=get_mistral_id(content.tool_call_id),
-            content=json.dumps(content.tool_result),
+            content=json_dumps(content.tool_result),
         )
 
     if content.role in ("user", "system"):
@@ -134,7 +135,7 @@ def _convert_content_to_param(
                     ChatCompletionMessageFunctionToolCallParam(
                         id=get_mistral_id(tool_call.id),
                         function=Function(
-                            arguments=json.dumps(tool_call.tool_args),
+                            arguments=json_dumps(tool_call.tool_args),
                             name=tool_call.tool_name,
                         ),
                         type="function",
@@ -164,6 +165,7 @@ async def _openai_to_ha_stream(
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict, None]:
     """Transform the OpenAI stream into the Home Assistant delta format."""
     first_chunk = True
+    has_yielded_anything = False
     active_tool_calls_by_index: dict[int, dict[str, Any]] = {}
 
     buffer = ""
@@ -178,10 +180,20 @@ async def _openai_to_ha_stream(
         delta = chunk.choices[0].delta
         LOGGER.debug("Δ: %s", delta)
 
-        if first_chunk and delta.role:
-            yield {"role": delta.role}
+        # 1. Role select
+        if first_chunk:
+            yield {"role": delta.role or "assistant"}
             first_chunk = False
 
+        # 2. Native API Processing for Thinking
+        reasoning = getattr(delta, "reasoning_content", None)
+        if reasoning:
+            if not strip_think_tags:
+                yield {"thinking_content": reasoning}
+                has_yielded_anything = True
+            continue
+
+        # 3. Legacy <think> tag processing 
         if delta.content:
             content_text = ""
             if isinstance(delta.content, list):
@@ -194,37 +206,45 @@ async def _openai_to_ha_stream(
             if not content_text:
                 continue
 
-            if not strip_think_tags:
-                yield {"content": content_text}
-                continue
-
             buffer += content_text
-            while True:
+
+            while buffer:
                 if is_in_think_block:
-                    end_tag_pos = buffer.find(end_tag)
-                    if end_tag_pos != -1:
+                    end_pos = buffer.find(end_tag)
+                    if end_pos != -1:
+                        think_text = buffer[:end_pos]
+                        if think_text and not strip_think_tags:
+                            yield {"thinking_content": think_text}
+                            has_yielded_anything = True
+                        
                         is_in_think_block = False
-                        buffer = buffer[end_tag_pos + len(end_tag) :]
-                        continue
-                    break
+                        buffer = buffer[end_pos + len(end_tag):]
+                    else:
+                        # Весь текущий буфер - это мысли
+                        if not strip_think_tags:
+                            yield {"thinking_content": buffer}
+                            has_yielded_anything = True
+                        buffer = ""
                 else:
-                    start_tag_pos = buffer.find(start_tag)
-                    if start_tag_pos != -1:
-                        content_to_yield = buffer[:start_tag_pos]
-                        if content_to_yield:
-                            yield {"content": content_to_yield}
-
+                    start_pos = buffer.find(start_tag)
+                    if start_pos != -1:
+                        normal_text = buffer[:start_pos]
+                        if normal_text:
+                            yield {"content": normal_text}
+                            has_yielded_anything = True
+                        
                         is_in_think_block = True
-                        buffer = buffer[start_tag_pos + len(start_tag) :]
-                        continue
+                        buffer = buffer[start_pos + len(start_tag):]
+                    else:
+                        # Защита от "разрыва" тега между чанками (например, "<th" и "ink>")
+                        if len(buffer) >= len(start_tag):
+                            safe_len = len(buffer) - len(start_tag) + 1
+                            yield {"content": buffer[:safe_len]}
+                            has_yielded_anything = True
+                            buffer = buffer[safe_len:]
+                        break
 
-                    if len(buffer) > len(start_tag):
-                        safe_yield_len = len(buffer) - len(start_tag)
-                        yield {"content": buffer[:safe_yield_len]}
-                        buffer = buffer[safe_yield_len:]
-
-                    break
-
+        # 4. Tool Calls
         if delta.tool_calls:
             for tc_delta in delta.tool_calls:
                 if tc_delta.index is None:
@@ -240,6 +260,7 @@ async def _openai_to_ha_stream(
                     if tc_delta.function.arguments:
                         current_tc_data["args_str"] += tc_delta.function.arguments
 
+        # 5. Final
         choice_finish_reason = chunk.choices[0].finish_reason
         if choice_finish_reason and active_tool_calls_by_index:
             final_tool_inputs = []
@@ -257,16 +278,24 @@ async def _openai_to_ha_stream(
                         )
                     )
                 except json.JSONDecodeError:
-                    LOGGER.error(
-                        "Failed to decode JSON for tool %s: %s", tool_name, args_str
-                    )
+                    LOGGER.error("Failed to decode JSON for tool %s: %s", tool_name, args_str)
             if final_tool_inputs:
                 yield {"tool_calls": final_tool_inputs}
             active_tool_calls_by_index.clear()
 
-    if strip_think_tags and not is_in_think_block and buffer:
-        yield {"content": buffer}
+    # --- Clear buffer ---
+    if buffer:
+        if is_in_think_block:
+            if not strip_think_tags:
+                yield {"thinking_content": buffer}
+                has_yielded_anything = True
+        else:
+            yield {"content": buffer}
+            has_yielded_anything = True
 
+    # Placeholder
+    if strip_think_tags and not has_yielded_anything:
+        yield {"content": " "}
 
 class OpenAICompatibleConversationEntity(
     conversation.ConversationEntity, conversation.AbstractConversationAgent
@@ -353,7 +382,7 @@ class OpenAICompatibleConversationEntity(
         is_mistral = "mistral.ai" in base_url.lower()
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
-            # === HISTORY SANITIZER ===
+            # === HISTORY SANITIZER (Лечение истории HA) ===
             # ВАЖНО: Выполняем внутри цикла, чтобы видеть свежие изменения в chat_log
             sanitized_content_list = []
             raw_content = chat_log.content
@@ -398,7 +427,7 @@ class OpenAICompatibleConversationEntity(
                     if not isinstance(next_item, conversation.ToolResultContent):
                         LOGGER.debug("Sanitizer: Injecting fake ToolResult for broken chain.")
                         
-                        # 1. Вставляем фейковый результат с инструкцией для LLM
+                        # 1. Вставляем фейковый результат с инструкцией для LLM НЕ ПОВТОРЯТЬ
                         for tool_call in item.tool_calls:
                             fake_result = conversation.ToolResultContent(
                                 agent_id=item.agent_id,
@@ -435,7 +464,6 @@ class OpenAICompatibleConversationEntity(
             # --- Freeze timestamp ---
             if (
                 enable_kv_cache_fix
-                # If the tools require the current time, uncomment it.
                 # and _iteration == 0
                 and messages
                 and messages[0].get("role") == "system"
@@ -536,7 +564,7 @@ class OpenAICompatibleConversationEntity(
             if not chat_log.unresponded_tool_results:
                 break
         
-        # --- Фикс на выполнение build-in комманд после ответа LLM с вопросом  ---
+        # --- НАЧАЛО ФИКСА ---
         
         result = conversation.async_get_result_from_chat_log(user_input, chat_log)
 
@@ -563,8 +591,7 @@ class OpenAICompatibleConversationEntity(
             self.hass.loop.call_later(0.5, sabotage_agent_lock)
 
         return result
-        # --- end  ---
-        # return conversation.async_get_result_from_chat_log(user_input, chat_log)
+ #       return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
     async def async_stream_response(
         self,
@@ -624,4 +651,3 @@ class OpenAICompatibleConversationEntity(
         except Exception as err:
             LOGGER.error("Unexpected error during streaming: %s", err)
             yield "An unexpected error occurred."
-            
