@@ -34,12 +34,12 @@
             "top_p": "Top P",
             "llm_hass_api": "LLM API Access",
             "enable_kv_cache_fix": "Freeze timestamp",
-            "no_think": "Disable Qwen 'thinking'",
+            "no_think": "Disable 'thinking'",
             "strip_think_tags": "Hide the thinking process"
           },
           "data_description": {
             "prompt": "Provide the system prompt. Template expressions can be used.",
-            "no_think": "This option disables the 'thinking' stage for Qwen models.",
+            "no_think": "This option disables the 'thinking' stage [llama.cpp only].",
             "strip_think_tags": "Text within think tags is excluded from the output and history."
           }
         }
@@ -66,12 +66,17 @@
           "example": "/config/www/snapshot.jpg"
         },
         "model": {
-          "name": "Модель",
+          "name": "Model",
           "description": "Specify the model for the selected provider. Default: mistral-small-latest",
           "example": "qwen/qwen3-vl-235b-a22b-instruct"
         },
-
-        "max_tokens": { "name": "Max tokens" }
+        "max_tokens": {
+          "name": "Max tokens"  
+        },
+        "disable_thinking": {
+          "name": "Disable reasoning [llama.cpp]",
+          "description": "Using this with other backends may not work or could cause errors."
+        }
       }
     },
     "web_search": {

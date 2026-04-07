@@ -1,3 +1,5 @@
+# __init__.py
+
 """The OpenAI Compatible Conversation integration."""
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import httpx
 import openai
 import voluptuous as vol
 
+# --- Импорты из Home Assistant Core ---
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import (
@@ -33,12 +36,14 @@ from homeassistant.helpers import (
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.typing import ConfigType
 
+# --- Импорты из компонентов Home Assistant ---
 from homeassistant.components import conversation as ha_conversation, tts
 from homeassistant.components.assist_pipeline import async_get_pipeline
 from homeassistant.components.assist_satellite.const import (
     DOMAIN as ASSIST_SATELLITE_DOMAIN,
 )
 
+# --- Импорты из вашей интеграции ---
 from .const import (
     CONF_BASE_URL,
     CONF_CHAT_MODEL,
@@ -50,6 +55,7 @@ from .const import (
 )
 from .conversation import OpenAICompatibleConversationEntity
 
+# --- Определяем имена сервисов ---
 SERVICE_GENERATE_IMAGE = "generate_image"
 SERVICE_MISTRAL_VISION = "mistral_vision"
 SERVICE_WEB_SEARCH = "web_search"
@@ -65,7 +71,7 @@ type OpenAICompatibleConfigEntry = ConfigEntry[openai.AsyncClient]
 
 # --- web_search ---
 async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
-
+    # ... (код этой функции без изменений)
     entry_id = call.data["config_entry"]
     entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -184,10 +190,10 @@ async def web_search(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up OpenAI Compatible Conversation."""
 
-    # ---  mistral_vision ---
+    # --- Существующий код для mistral_vision ---
     async def mistral_vision(call: ServiceCall) -> ServiceResponse:
         """Describe an image using Mistral AI."""
-
+        # ... (код этой функции без изменений)
         entry_id = call.data["config_entry"]
         entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -240,6 +246,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             }
         ]
 
+        extra_body = None
+        
+        if call.data.get("disable_thinking"):
+            extra_body = {
+                "chat_template_kwargs": {"enable_thinking": False}
+            }
+
         try:
             model_to_use = call.data.get("model", "mistral-small-latest")
 
@@ -247,6 +260,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 model=model_to_use,
                 messages=messages,
                 max_tokens=call.data.get("max_tokens", RECOMMENDED_MAX_TOKENS),
+                extra_body=extra_body,
             )
             content = response.choices[0].message.content
             return {"text": content if content else ""}
@@ -270,8 +284,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 vol.Required("image_path"): cv.string,
                 vol.Optional("model"): cv.string,
                 vol.Optional("max_tokens", default=RECOMMENDED_MAX_TOKENS): vol.All(
-                    vol.Coerce(int), vol.Range(min=50, max=1000)
+                    vol.Coerce(int), vol.Range(min=50, max=2000)
                 ),
+                vol.Optional("disable_thinking", default=False): cv.boolean,
             }
         ),
         supports_response=SupportsResponse.ONLY,
@@ -602,4 +617,3 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenAICompatibleConfigEn
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload OpenAI."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    

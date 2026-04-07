@@ -35,13 +35,13 @@
             "top_p": "Top P",
             "llm_hass_api": "Accès LLM à l'API",
             "enable_kv_cache_fix": "Freeze timestamp",
-            "no_think": "Désactiver les 'réflexions' de Qwen",
+            "no_think": "Désactiver les 'réflexions'",
             "strip_think_tags": "Masquer le processus de réflexion"
           },
           "data_description": {
             "name": "Donnez un nom unique et descriptif à cet agent.",
             "prompt": "Spécifiez le prompt système. Vous pouvez utiliser des expressions de modèle.",
-            "no_think": "Cette option désactive l'étape de 'réflexion' pour les modèles Qwen.",
+            "no_think": "Cette option désactive l'étape de 'réflexion' [llama.cpp only].",
             "strip_think_tags": "Le texte à l'intérieur des balises think est exclu de la sortie et de l'historique."
           }
         }
@@ -76,6 +76,10 @@
         },
         "max_tokens": {
           "name": "Nombre max de tokens"
+        },
+        "disable_thinking": {
+          "name": "Désactiver le raisonnement [llama.cpp]",
+          "description": "L'utilisation de cette option avecavec d'autres backends peut ne pas fonctionner ou générer une erreur."
         }
       }
     },

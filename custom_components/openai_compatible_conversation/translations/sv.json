@@ -41,7 +41,7 @@
           "data_description": {
             "name": "Ge denna agent ett unikt och beskrivande namn.",
             "prompt": "Instruera hur LLM ska svara. Detta kan vara en mall.",
-            "no_think": "Detta alternativ inaktiverar tänkande för Qwen-modeller.",
+            "no_think": "Detta alternativ inaktiverar tänkande [llama.cpp only].",
             "strip_think_tags": "Text inom think-taggar utesluts från utdata och historik."
           }
         }

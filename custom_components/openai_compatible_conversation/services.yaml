@@ -99,6 +99,10 @@ mistral_vision:
       selector:
         config_entry:
           integration: openai_compatible_conversation
+    model:
+      required: false
+      selector:
+        text:
     prompt:
       required: true
       selector:
@@ -108,18 +112,19 @@ mistral_vision:
       required: true
       selector:
         text:
-    model:
-      required: false
-      selector:
-        text:
     max_tokens:
       required: false
-      default: 300
+      default: 500
       selector:
         number:
           min: 50
-          max: 1000
-          step: 10
+          max: 2000
+          step: 50
+    disable_thinking:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 web_search:
   name: Web Search

@@ -178,7 +178,6 @@ async def _openai_to_ha_stream(
             continue
 
         delta = chunk.choices[0].delta
-        LOGGER.debug("Δ: %s", delta)
 
         # 1. Role select
         if first_chunk:
@@ -423,7 +422,7 @@ class OpenAICompatibleConversationEntity(
                 if isinstance(item, conversation.AssistantContent) and item.tool_calls:
                     next_item = raw_content[i + 1] if i + 1 < len(raw_content) else None
                     
-                    # Если следом идет НЕ результат
+                    # Если следом идет НЕ результат (разрыв цепи из-за бага HA)
                     if not isinstance(next_item, conversation.ToolResultContent):
                         LOGGER.debug("Sanitizer: Injecting fake ToolResult for broken chain.")
                         
@@ -492,14 +491,6 @@ class OpenAICompatibleConversationEntity(
                         }
             # --- end ---
             
-            if _iteration == 0:
-                no_think_enabled = options.get(CONF_NO_THINK, False)
-                if no_think_enabled and messages and messages[-1]["role"] == "user":
-                    user_message = messages[-1]
-                    current_content = str(user_message.get("content", ""))
-                    if not current_content.endswith("/no_think"):
-                        user_message["content"] = current_content + "/no_think"
-
             model_args: dict[str, Any] = {
                 "model": options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL),
                 "messages": messages,
@@ -513,6 +504,15 @@ class OpenAICompatibleConversationEntity(
                 "stream": True,
             }
 
+            # Disable thinking API
+            if options.get(CONF_NO_THINK, False):
+                model_args["extra_body"] = {
+                    "chat_template_kwargs": {
+                        "enable_thinking": False
+                    },
+                    "reasoning_budget": 0
+                }
+            
             # Do not send 'user' field for Mistral
             if not is_mistral:
                 model_args["user"] = conversation_id
@@ -564,7 +564,7 @@ class OpenAICompatibleConversationEntity(
             if not chat_log.unresponded_tool_results:
                 break
         
-        # --- НАЧАЛО ФИКСА ---
+        # --- Start Sabotage fix ---
         
         result = conversation.async_get_result_from_chat_log(user_input, chat_log)
 
@@ -635,6 +635,14 @@ class OpenAICompatibleConversationEntity(
             ),
             "stream": True,
         }
+
+        if self.options.get(CONF_NO_THINK, False):
+            model_args["extra_body"] = {
+                "chat_template_kwargs": {
+                    "enable_thinking": False
+                },
+                "reasoning_budget": 0
+            }
         
         try:
             response_stream = await self.client.chat.completions.create(**model_args)
