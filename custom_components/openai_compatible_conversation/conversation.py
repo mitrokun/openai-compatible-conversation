@@ -59,6 +59,15 @@ LOGGER = logging.getLogger(__name__)
 MAX_TOOL_ITERATIONS = 10
 
 
+def _remove_empty_tool_args(tool_args: dict[str, Any]) -> dict[str, Any]:
+    """Remove empty optional values from tool arguments."""
+    return {
+        key: value
+        for key, value in tool_args.items()
+        if value is not None and value != "" and value != [] and value != {}
+    }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: OpenAICompatibleConfigEntry,
@@ -251,6 +260,7 @@ async def _openai_to_ha_stream(
                     continue
                 try:
                     parsed_args = json.loads(args_str if args_str else "{}")
+                    parsed_args = _remove_empty_tool_args(parsed_args)
                     final_tool_inputs.append(
                         llm.ToolInput(
                             id=tool_id, tool_name=tool_name, tool_args=parsed_args
