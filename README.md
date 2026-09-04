@@ -21,7 +21,7 @@ It is possible to use the action directly in automation, but then the system wil
 
 
 >[!TIP]
-If you have problems, try using the files from this [branch](https://github.com/mitrokun/openai-compatible-conversation/tree/sanitazer)
+If you have problems, try using the files from this [branch](https://github.com/mitrokun/openai-compatible-conversation/tree/llama_thinking_control)
 
 ---
 
